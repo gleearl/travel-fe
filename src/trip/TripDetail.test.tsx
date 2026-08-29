@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../auth/useAuth";
+import { ApiError } from "../lib/api/http";
 import type { Place, Trip } from "../lib/api/types";
 import { TripDetail } from "./TripDetail";
 
@@ -31,7 +32,14 @@ const TRIP: Trip = {
   endDate: "2026-03-18",
   placeCount: 3,
   places: [
-    place({ id: 1, name: "Fuglen Asakusa", category: "cafe", notes: "try the honey toast" }),
+    place({
+      id: 1,
+      name: "Fuglen Asakusa",
+      address: "2-6-15 Asakusa, Taito City",
+      category: "cafe",
+      link: "https://instagram.com/p/abc123",
+      notes: "try the honey toast",
+    }),
     place({ id: 2, name: "teamLab Borderless", category: "sight", visited: true }),
     place({ id: 3, name: "Ichiran", category: "food" }),
   ],
@@ -63,6 +71,17 @@ vi.mock("./TripMap", () => ({
   useDefaultPoint: () => ({ lat: 35.68, lng: 139.76 }),
 }));
 
+const searchPlaces = vi.fn();
+const resolveMapLink = vi.fn();
+
+vi.mock("../lib/api/mapLink", () => ({
+  resolveMapLink: (url: string) => resolveMapLink(url),
+}));
+
+vi.mock("../lib/api/geocode", () => ({
+  searchPlaces: (query: string) => searchPlaces(query),
+}));
+
 vi.mock("../lib/api/places", () => ({
   updatePlace: (id: number, input: unknown) => updatePlace(id, input),
   createPlace: vi.fn(),
@@ -84,7 +103,24 @@ function open() {
 beforeEach(() => {
   fetchTrip.mockReset().mockResolvedValue(structuredClone(TRIP));
   updatePlace.mockReset().mockImplementation((id, input) => Promise.resolve({ ...input, id }));
+  searchPlaces.mockReset().mockResolvedValue([]);
+  resolveMapLink.mockReset();
 });
+
+/** Opens the add-place sheet and returns the search field inside it. */
+async function openSearch(user: ReturnType<typeof userEvent.setup>) {
+  await screen.findByRole("heading", { name: "Japan 2026" });
+  await user.click(screen.getByRole("button", { name: "Add place" }));
+
+  return screen.getByLabelText("Find it");
+}
+
+const FUGLEN = {
+  name: "Fuglen Asakusa",
+  address: "Fuglen Asakusa, 2-6-15, Asakusa, Taito City, Tokyo",
+  lat: 35.7148231,
+  lng: 139.7967412,
+};
 
 describe("the trip screen", () => {
   it("shows the trip and every place on it", async () => {
@@ -159,6 +195,101 @@ describe("the trip screen", () => {
 
     const card = screen.getByRole("heading", { name: "Ichiran" }).closest("li")!;
     expect(within(card).getByRole("button", { current: true })).toBeInTheDocument();
+  });
+
+  it("offers a way out to Google Maps for each place", async () => {
+    open();
+
+    const card = (await screen.findByRole("heading", { name: "Fuglen Asakusa" })).closest("li")!;
+    const link = within(card).getByRole("link", { name: "Fuglen Asakusa in Google Maps" });
+
+    expect(link).toHaveAttribute("href", expect.stringContaining("google.com/maps/search/"));
+    expect(link).toHaveAttribute("href", expect.stringContaining("Fuglen%20Asakusa"));
+  });
+
+  it("links out to the post that put a place on the list", async () => {
+    open();
+
+    const card = (await screen.findByRole("heading", { name: "Fuglen Asakusa" })).closest("li")!;
+    /* The link is an Instagram mark rather than a word, so its accessible name
+       is the only thing that says where it goes. */
+    const link = within(card).getByRole("link", { name: "Post about Fuglen Asakusa" });
+
+    expect(link).toHaveAttribute("href", "https://instagram.com/p/abc123");
+  });
+
+  it("fills a place in from a Google Maps link pasted into the search box", async () => {
+    const user = userEvent.setup();
+    resolveMapLink.mockResolvedValue(FUGLEN);
+    open();
+
+    await user.type(await openSearch(user), "https://maps.app.goo.gl/aB3xY9");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    /* Straight into the form: a shared link names one place, so there is
+       nothing to choose between. */
+    expect(await screen.findByDisplayValue("Fuglen Asakusa")).toBeInTheDocument();
+    expect(screen.getByLabelText("Address")).toHaveValue(FUGLEN.address);
+    expect(screen.getByText(/Pin at 35.71482, 139.79674/)).toBeInTheDocument();
+    expect(searchPlaces).not.toHaveBeenCalled();
+  });
+
+  it("still searches by name when what you typed is not a link", async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.type(await openSearch(user), "fuglen asakusa");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(searchPlaces).toHaveBeenCalledWith("fuglen asakusa");
+    expect(resolveMapLink).not.toHaveBeenCalled();
+  });
+
+  it("passes on what the server said when a link cannot be read", async () => {
+    const user = userEvent.setup();
+    resolveMapLink.mockRejectedValue(new ApiError(422, "That link doesn't point at a place.", {}));
+    open();
+
+    await user.type(await openSearch(user), "https://maps.app.goo.gl/aB3xY9");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("That link doesn't point at a place.");
+  });
+
+  it("names a place after the Instagram account when the name is still empty", async () => {
+    const user = userEvent.setup();
+    open();
+    await openSearch(user);
+
+    await user.type(screen.getByLabelText("Link"), "instagram.com/fuglen.coffee");
+    await user.tab();
+
+    expect(screen.getByLabelText("Place")).toHaveValue("Fuglen Coffee");
+  });
+
+  it("gives a pasted link the scheme the server insists on", async () => {
+    const user = userEvent.setup();
+    open();
+    await openSearch(user);
+
+    /* Nobody copies the "https://" off a phone, and the API validates the link
+       as a url, so without this a pasted account is refused on save. */
+    await user.type(screen.getByLabelText("Link"), "instagram.com/fuglen.coffee");
+    await user.tab();
+
+    expect(screen.getByLabelText("Link")).toHaveValue("https://instagram.com/fuglen.coffee");
+  });
+
+  it("leaves a name you have already typed alone", async () => {
+    const user = userEvent.setup();
+    open();
+    await openSearch(user);
+
+    await user.type(screen.getByLabelText("Place"), "Fuglen, the good one");
+    await user.type(screen.getByLabelText("Link"), "instagram.com/fuglen.coffee");
+    await user.tab();
+
+    expect(screen.getByLabelText("Place")).toHaveValue("Fuglen, the good one");
   });
 
   it("says so plainly when the trip can't be loaded", async () => {

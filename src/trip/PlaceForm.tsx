@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { CATEGORIES, type Category } from "../lib/categories";
 import { searchPlaces } from "../lib/api/geocode";
+import { resolveMapLink } from "../lib/api/mapLink";
+import { suggestPlaceName } from "../lib/instagram";
+import { looksLikeMapsLink } from "../lib/maps";
 import { ApiError } from "../lib/api/http";
 import { createPlace, deletePlace, updatePlace } from "../lib/api/places";
 import type { GeocodeResult, Place, PlaceInput } from "../lib/api/types";
@@ -154,8 +157,28 @@ export function PlaceForm({
           placeholder="https://instagram.com/p/…"
           value={form.link}
           onChange={(e) => set("link", e.target.value)}
+          onBlur={() => {
+            const link = form.link.trim();
+
+            if (link === "") return;
+
+            /* Nobody copies the scheme off a phone, and the API takes this
+               field as a url, so a pasted account would be refused on save. */
+            const scheme = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+
+            if (scheme !== form.link) set("link", scheme);
+
+            /* Only into a name you have not written yourself. A username tidied
+               up is usually what the place is called, and where it is not it is
+               a better start than an empty field. */
+            if (form.name.trim() !== "") return;
+
+            const suggested = suggestPlaceName(scheme);
+
+            if (suggested !== null) set("name", suggested);
+          }}
           error={error?.fieldError("link")}
-          hint="The reel or post that put this on the list."
+          hint="The account that put this on the list. Its name fills the top of the form."
         />
 
         <TextArea
@@ -207,12 +230,26 @@ function PlaceSearch({ onPick }: { onPick: (hit: GeocodeResult) => void }) {
     event.preventDefault();
     if (query.trim().length < 2) return;
 
+
     setBusy(true);
     setFailed(null);
     try {
+      /* A shared link names one place, so there is nothing to choose between:
+         it goes straight into the form rather than into a list of one. */
+      if (looksLikeMapsLink(query)) {
+        onPick(await resolveMapLink(query));
+        setHits(null);
+        setQuery("");
+        return;
+      }
+
       setHits(await searchPlaces(query));
     } catch (caught) {
-      setFailed(caught instanceof ApiError ? caught.message : "Couldn't reach the server.");
+      setFailed(
+        caught instanceof ApiError
+          ? (caught.fieldError("url") ?? caught.message)
+          : "Couldn't reach the server.",
+      );
     } finally {
       setBusy(false);
     }
@@ -223,7 +260,7 @@ function PlaceSearch({ onPick }: { onPick: (hit: GeocodeResult) => void }) {
       <form onSubmit={search} className="flex items-end gap-2">
         <Field
           label="Find it"
-          placeholder="Fuglen Asakusa"
+          placeholder="Fuglen Asakusa, or a Google Maps link"
           className="flex-1"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

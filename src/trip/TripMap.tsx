@@ -155,6 +155,16 @@ export function TripMap({
     }
 
     for (const place of places) {
+      const existing = live.get(place.id);
+
+      if (existing) {
+        /* Restyled in place. The pin MapLibre was handed is the pin it keeps
+           writing positions to, and swapping the node out from under it is how
+           pins come loose from their coordinates. */
+        syncPin(existing, place, place.id === selectedId);
+        continue;
+      }
+
       const element = pinElement(place, place.id === selectedId);
       element.addEventListener("click", (event) => {
         /* Otherwise the map takes this as a click on itself and the press
@@ -163,21 +173,12 @@ export function TripMap({
         handlers.current.onSelect(place.id);
       });
 
-      const existing = live.get(place.id);
-      if (existing) {
-        /* Replacing the element rather than the marker keeps the marker's
-           position animation and its place in the pane. */
-        existing.getElement().replaceWith(element);
-        (existing as unknown as { _element: HTMLElement })._element = element;
-        existing.setLngLat([place.lng, place.lat]);
-      } else {
-        live.set(
-          place.id,
-          new maplibregl.Marker({ element, anchor: "center" })
-            .setLngLat([place.lng, place.lat])
-            .addTo(current),
-        );
-      }
+      live.set(
+        place.id,
+        new maplibregl.Marker({ element, anchor: "center" })
+          .setLngLat([place.lng, place.lat])
+          .addTo(current),
+      );
     }
   }, [places, selectedId]);
 
@@ -214,27 +215,52 @@ export function TripMap({
 /* A circle in the category's colour with a paper ring — not a teardrop pin,
    which belongs to a different map. Visited places go hollow: still there, no
    longer something to do. */
-function pinElement(place: Place, selected: boolean): HTMLElement {
+export function pinElement(place: Place, selected: boolean): HTMLElement {
+  const element = document.createElement("button");
+  element.type = "button";
+
+  /* The parts that never change. Set once, and never through cssText again —
+     see applyPinStyle. */
+  element.style.borderRadius = "999px";
+  element.style.padding = "0";
+  element.style.cursor = "pointer";
+  element.style.transition = "width .18s var(--ease-settle), height .18s var(--ease-settle)";
+
+  applyPinStyle(element, place, selected);
+
+  return element;
+}
+
+/**
+ * Bring an existing pin up to date: its size, its colour, where it is.
+ *
+ * The marker keeps the element it was built with. MapLibre positions a pin by
+ * writing a transform to that element on every move, and the element only sits
+ * where the transform puts it because the class MapLibre's constructor added
+ * makes it absolutely positioned. Give the marker a different node and it goes
+ * on writing transforms to something left in normal flow — so the pin drifts
+ * off its coordinates, and further at every zoom.
+ */
+export function syncPin(marker: MapLibreMarker, place: Place, selected: boolean): void {
+  applyPinStyle(marker.getElement(), place, selected);
+  marker.setLngLat([place.lng, place.lat]);
+}
+
+/* Property by property rather than through cssText: MapLibre keeps the pin's
+   position in the transform on this same style object, and assigning cssText
+   would wipe it — dropping every pin onto the map's top left corner until the
+   next time the camera moved. */
+function applyPinStyle(element: HTMLElement, place: Place, selected: boolean): void {
   const colour = categoryOf(place.category).color;
   const size = selected ? 26 : 18;
 
-  const element = document.createElement("button");
-  element.type = "button";
   element.title = place.name;
   element.setAttribute("aria-label", place.name);
-  element.style.cssText = [
-    `width:${size}px`,
-    `height:${size}px`,
-    "border-radius:999px",
-    "padding:0",
-    "cursor:pointer",
-    `background:${place.visited ? "var(--color-paper)" : colour}`,
-    `border:${place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)"}`,
-    `box-shadow:${selected ? "var(--shadow-pin)" : "0 1px 3px rgb(28 26 23 / 0.3)"}`,
-    "transition:width .18s var(--ease-settle), height .18s var(--ease-settle)",
-  ].join(";");
-
-  return element;
+  element.style.width = `${size}px`;
+  element.style.height = `${size}px`;
+  element.style.background = place.visited ? "var(--color-paper)" : colour;
+  element.style.border = place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)";
+  element.style.boxShadow = selected ? "var(--shadow-pin)" : "0 1px 3px rgb(28 26 23 / 0.3)";
 }
 
 /** The centre a new pin should default to when there is nothing to fit. */
