@@ -1,26 +1,45 @@
-import { useEffect, useMemo, useRef } from "react";
-import { AttributionControl, MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import L from "leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
+/* Default import, not named: MapLibre ships one UMD bundle and no ES module
+   at all, so `import { Map }` type-checks perfectly and resolves to undefined
+   at runtime. The types come in separately, where being erased at build time
+   makes the distinction moot. */
+import maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, Marker as MapLibreMarker } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
+
+/* MapLibre parses vector tiles in a Web Worker, which it normally builds out
+   of its own bundle. Bundled by anything else — the dev server's dependency
+   pre-bundler included — that worker comes out broken, and the failure is
+   silent and total: the style loads, the sprites load, the canvas appears, the
+   background colour paints, and not one tile is ever fetched. No error is
+   raised anywhere. Pointing it at the worker file the package ships is the
+   supported way out, and it costs one request. */
+maplibregl.setWorkerUrl(workerUrl);
 import { WORLD_VIEW } from "../config";
 import { categoryOf } from "../lib/categories";
 import type { Place, Trip } from "../lib/api/types";
 
 /* The map.
 
-   OpenStreetMap's own tiles: free, no key, no account, no billing — which was
-   the whole point of choosing this over Google. They are also the only major
-   free basemap left that asks for nothing; CARTO's Positron, the obvious
-   choice for a muted look, now watermarks every tile with "API KEY REQUIRED".
+   OpenFreeMap's "Liberty" style, drawn from vector tiles: white roads, soft
+   green parks, blue water, grey buildings — the modern web map everyone
+   already knows how to read. Free, no key, no account, no request limit.
 
-   The cost is that these are full-colour, and a colourful basemap competes
-   with the pins for the one thing on screen that matters. So they are toned
-   down in CSS instead (see .leaflet-tile in styles/base.css): desaturated and
-   lifted until the map reads as paper and the pins are the loudest thing on
-   it. Same result, nobody's key.
+   Vector rather than raster is what makes that possible. Raster tiles arrive
+   as finished pictures, so the only thing that can be done to them is a filter
+   over the whole image at once. Here every layer is drawn in the browser from
+   data, so roads can be white while parks stay green.
+
+   MapLibre draws this directly rather than through Leaflet. The bridge between
+   the two libraries exists, and it does not survive the dev server: bundled it
+   breaks MapLibre's worker, so the style loads, the canvas appears and not one
+   tile is ever fetched — no error, just a blank map. Unbundled, its own module
+   interop fails outright. One library doing the whole job has neither problem.
 */
-const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+
+/** How long a press has to be held on open map before it means "here". */
+const LONG_PRESS_MS = 550;
 
 export function TripMap({
   trip,
@@ -41,116 +60,181 @@ export function TripMap({
    *  pins puts them where they can actually be seen. */
   bottomPadding: number;
 }) {
-  const centre = trip.destinationLat !== null && trip.destinationLng !== null
-    ? { lat: trip.destinationLat, lng: trip.destinationLng, zoom: 11 }
-    : WORLD_VIEW;
+  const container = useRef<HTMLDivElement>(null);
+  const map = useRef<MapLibreMap | null>(null);
+  const markers = useRef(new Map<number, MapLibreMarker>());
+  /* Nothing may move the camera until the map says it is ready. Asked to fit
+     bounds before it has measured itself, it works the fit out against a
+     viewport it does not have yet and lands somewhere near the pins rather
+     than around them — which looks like the fit simply being wrong. */
+  const [ready, setReady] = useState(false);
 
-  return (
-    <MapContainer
-      center={[centre.lat, centre.lng]}
-      zoom={centre.zoom}
-      zoomControl={false}
-      className="h-full w-full"
-      /* Placed by hand, top-right: the sheet covers the bottom corner where
-         Leaflet puts this by default, and OpenStreetMap's tiles are free on
-         the condition that the credit is visible. */
-      attributionControl={false}
-    >
-      <AttributionControl position="topright" prefix={false} />
-      <TileLayer url={TILES} attribution={ATTRIBUTION} maxZoom={19} />
+  /* Handlers reach the map through a ref rather than through the effect's
+     dependencies: rebuilding the map because a callback changed identity would
+     throw away the tiles and the camera along with it. */
+  const handlers = useRef({ onSelect, onDropPin });
+  handlers.current = { onSelect, onDropPin };
 
-      {places.map((place) => (
-        <Marker
-          key={place.id}
-          position={[place.lat, place.lng]}
-          icon={pinIcon(place, place.id === selectedId)}
-          title={place.name}
-          zIndexOffset={place.id === selectedId ? 1000 : 0}
-          eventHandlers={{ click: () => onSelect(place.id) }}
-        />
-      ))}
+  const centre =
+    trip.destinationLat !== null && trip.destinationLng !== null
+      ? { lat: trip.destinationLat, lng: trip.destinationLng, zoom: 11 }
+      : WORLD_VIEW;
 
-      <FitToPlaces places={places} bottomPadding={bottomPadding} />
-      <LongPress onLongPress={onDropPin} />
-    </MapContainer>
-  );
-}
-
-/* A circle in the category's colour with an ink ring — not Leaflet's blue
-   teardrop, which belongs to a different app. Visited places go hollow: still
-   there, no longer something to do. */
-function pinIcon(place: Place, selected: boolean): L.DivIcon {
-  const colour = categoryOf(place.category).color;
-  const size = selected ? 26 : 18;
-
-  return L.divIcon({
-    className: "pin-icon",
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    html: `
-      <span style="
-        display:block; width:${size}px; height:${size}px; border-radius:999px;
-        background:${place.visited ? "var(--color-paper)" : colour};
-        border:${place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)"};
-        box-shadow:${selected ? "var(--shadow-pin)" : "0 1px 3px rgb(28 26 23 / 0.3)"};
-        transition:width .18s var(--ease-settle), height .18s var(--ease-settle);
-      "></span>`,
-  });
-}
-
-/** Keeps every pin in view — but never fights a map the user just moved. */
-function FitToPlaces({ places, bottomPadding }: { places: Place[]; bottomPadding: number }) {
-  const map = useMap();
-  const fitted = useRef("");
-
+  /* ── The map itself. Built once, and only once. ───────────────────────── */
   useEffect(() => {
-    /* Refit only when the set of points actually changes: a plain dependency
-       on the array would refit on every render and undo any panning. */
-    const signature = places.map((p) => p.id).join(",");
-    if (signature === fitted.current || places.length === 0) return;
+    if (!container.current) return;
+
+    const created = new maplibregl.Map({
+      container: container.current,
+      style: STYLE,
+      center: [centre.lng, centre.lat],
+      zoom: centre.zoom,
+      /* The sheet covers the bottom of the map, so what MapLibre puts in the
+         bottom corner by default has to move. */
+      attributionControl: false,
+    });
+
+    /* The credit OpenFreeMap asks for — and the whole price of the map — is
+       declared by the style itself, so this control only has to show it.
+       Adding it again by hand printed it twice, separated by a pipe. Compact,
+       because at this width the full line runs the width of the screen. */
+    created.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
+
+    /* A press held on open map means "here". A tap does not — that is how you
+       pan, and a stray pin every time you moved the map would be maddening.
+       Desktop gets the same gesture through the right-click that a long press
+       raises there anyway. */
+    let timer: number | null = null;
+    const cancel = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+    };
+
+    created.on("touchstart", (event) => {
+      cancel();
+      const point = event.lngLat;
+      timer = window.setTimeout(() => handlers.current.onDropPin({ lat: point.lat, lng: point.lng }), LONG_PRESS_MS);
+    });
+    created.on("touchend", cancel);
+    created.on("touchcancel", cancel);
+    created.on("movestart", cancel);
+    created.on("contextmenu", (event) => {
+      cancel();
+      handlers.current.onDropPin({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+    });
+
+    created.on("load", () => setReady(true));
+
+    map.current = created;
+
+    return () => {
+      setReady(false);
+      cancel();
+      created.remove();
+      map.current = null;
+      markers.current.clear();
+    };
+    // Built from the trip's opening view; later changes move the camera rather
+    // than rebuilding the map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── The pins ─────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const current = map.current;
+    if (!current) return;
+
+    const live = markers.current;
+
+    // Gone from the list, gone from the map.
+    for (const [id, marker] of live) {
+      if (!places.some((place) => place.id === id)) {
+        marker.remove();
+        live.delete(id);
+      }
+    }
+
+    for (const place of places) {
+      const element = pinElement(place, place.id === selectedId);
+      element.addEventListener("click", (event) => {
+        /* Otherwise the map takes this as a click on itself and the press
+           begins a drag of the whole world. */
+        event.stopPropagation();
+        handlers.current.onSelect(place.id);
+      });
+
+      const existing = live.get(place.id);
+      if (existing) {
+        /* Replacing the element rather than the marker keeps the marker's
+           position animation and its place in the pane. */
+        existing.getElement().replaceWith(element);
+        (existing as unknown as { _element: HTMLElement })._element = element;
+        existing.setLngLat([place.lng, place.lat]);
+      } else {
+        live.set(
+          place.id,
+          new maplibregl.Marker({ element, anchor: "center" })
+            .setLngLat([place.lng, place.lat])
+            .addTo(current),
+        );
+      }
+    }
+  }, [places, selectedId]);
+
+  /* ── Keeping every pin in view ────────────────────────────────────────── */
+  const fitted = useRef("");
+  useEffect(() => {
+    const current = map.current;
+    if (!current || !ready || places.length === 0) return;
+
+    /* Refit only when the set of points actually changes. Fitting on every
+       render would undo any panning the moment anything else updated. */
+    const signature = places.map((place) => place.id).join(",");
+    if (signature === fitted.current) return;
     fitted.current = signature;
 
-    const bounds = L.latLngBounds(places.map((p) => [p.lat, p.lng] as [number, number]));
-    map.fitBounds(bounds, {
-      /* Enough at the top that a pin never hides under the attribution, and
-         at the bottom whatever the sheet is currently covering — otherwise
-         "fitted to your pins" means fitted to the half of them you can see. */
-      paddingTopLeft: [32, 56],
-      paddingBottomRight: [32, bottomPadding],
+    const bounds = places.reduce(
+      (box, place) => box.extend([place.lng, place.lat]),
+      new maplibregl.LngLatBounds([places[0].lng, places[0].lat], [places[0].lng, places[0].lat]),
+    );
+
+    current.fitBounds(bounds, {
+      /* Room at the top for the attribution, and at the bottom for whatever
+         the sheet is covering — otherwise "fitted to your pins" means fitted
+         to the half of them you can see. */
+      padding: { top: 72, bottom: bottomPadding, left: 48, right: 48 },
       maxZoom: 15,
       animate: false,
     });
-  }, [map, places, bottomPadding]);
+  }, [places, bottomPadding, ready]);
 
-  return null;
+  return <div ref={container} className="h-full w-full" />;
 }
 
-/** A press held on open map means "here". A tap does not — that is how you
- *  pan, and a stray pin every time you moved the map would be maddening. */
-function LongPress({ onLongPress }: { onLongPress: (point: { lat: number; lng: number }) => void }) {
-  const timer = useRef<number | null>(null);
+/* A circle in the category's colour with a paper ring — not a teardrop pin,
+   which belongs to a different map. Visited places go hollow: still there, no
+   longer something to do. */
+function pinElement(place: Place, selected: boolean): HTMLElement {
+  const colour = categoryOf(place.category).color;
+  const size = selected ? 26 : 18;
 
-  const cancel = () => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = null;
-  };
+  const element = document.createElement("button");
+  element.type = "button";
+  element.title = place.name;
+  element.setAttribute("aria-label", place.name);
+  element.style.cssText = [
+    `width:${size}px`,
+    `height:${size}px`,
+    "border-radius:999px",
+    "padding:0",
+    "cursor:pointer",
+    `background:${place.visited ? "var(--color-paper)" : colour}`,
+    `border:${place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)"}`,
+    `box-shadow:${selected ? "var(--shadow-pin)" : "0 1px 3px rgb(28 26 23 / 0.3)"}`,
+    "transition:width .18s var(--ease-settle), height .18s var(--ease-settle)",
+  ].join(";");
 
-  useMapEvents({
-    mousedown(event) {
-      cancel();
-      timer.current = window.setTimeout(() => onLongPress(event.latlng), 550);
-    },
-    mouseup: cancel,
-    dragstart: cancel,
-    movestart: cancel,
-    // Leaflet raises this itself on touch after ~1s; keep both paths.
-    contextmenu(event) {
-      cancel();
-      onLongPress(event.latlng);
-    },
-  });
-
-  return null;
+  return element;
 }
 
 /** The centre a new pin should default to when there is nothing to fit. */
@@ -158,8 +242,8 @@ export function useDefaultPoint(trip: Trip, places: Place[]) {
   return useMemo(() => {
     if (places.length > 0) {
       return {
-        lat: places.reduce((sum, p) => sum + p.lat, 0) / places.length,
-        lng: places.reduce((sum, p) => sum + p.lng, 0) / places.length,
+        lat: places.reduce((sum, place) => sum + place.lat, 0) / places.length,
+        lng: places.reduce((sum, place) => sum + place.lng, 0) / places.length,
       };
     }
     if (trip.destinationLat !== null && trip.destinationLng !== null) {

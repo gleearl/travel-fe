@@ -155,7 +155,7 @@ export function TripDetail() {
             onDropPin={(at) => setEditing({ kind: "new", at })}
             /* The rail sits beside the map, so it hides nothing; the sheet
                sits over it and hides half. */
-            bottomPadding={desktop ? 32 : Math.round(window.innerHeight * 0.52)}
+            bottomPadding={desktop ? 72 : Math.round(window.innerHeight * 0.45)}
           />
         </div>
 

@@ -3,7 +3,7 @@
 A travel journal you can tap. Trips, the places you want to go inside them, and
 the map they all sit on.
 
-React 19 · Vite · Tailwind v4 · Leaflet. The API is a separate repo,
+React 19 · Vite · Tailwind v4 · MapLibre GL. The API is a separate repo,
 [`travel-laravel`](../travel-laravel).
 
 ## Running it
@@ -52,9 +52,26 @@ a drag handle nobody can drag is a control only some people have.
 From `lg` up the same panel becomes a fixed rail beside the map. One component;
 the layout is the only difference.
 
-**The map** uses CARTO's Positron tiles — free, no key — because a near-
-monochrome basemap lets your own pins be the loudest thing on screen. Pins are
-`divIcon`s in the category's colour; visited places go hollow.
+**The map** is MapLibre GL drawing OpenFreeMap's "Liberty" style: white roads,
+green parks, blue water, the modern web map everyone already knows how to read.
+Free, no key, no account, no request limit — the credit in the corner is the
+whole price. Pins are plain DOM elements in the category's colour; visited
+places go hollow.
+
+Two things about it are worth knowing before touching `src/trip/TripMap.tsx`:
+
+- **MapLibre parses tiles in a Web Worker, and it must be given the worker file
+  explicitly** (`setWorkerUrl`). Bundled by anything else — the dev server's
+  dependency pre-bundler included — the worker it builds for itself comes out
+  broken, and the failure is silent and total: the style loads, the sprites
+  load, the canvas appears, the background colour paints, and not one tile is
+  ever fetched. Nothing errors.
+- **The first `fitBounds` waits for the map's `load` event.** Asked earlier, it
+  works the fit out against a viewport the map has not measured yet and lands
+  near the pins rather than around them.
+
+The map screen is behind a `lazy()` for a reason: MapLibre is most of the
+download, and the trips list has no map on it.
 
 **Searching for a place** is submit-driven, not autocomplete. It goes through
 the API to OpenStreetMap's Nominatim, whose usage policy is about a request a

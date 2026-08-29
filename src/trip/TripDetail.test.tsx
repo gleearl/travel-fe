@@ -46,6 +46,23 @@ vi.mock("../lib/api/trips", () => ({
   createTrip: vi.fn(),
 }));
 
+/* The map is WebGL and imperative DOM; jsdom has neither a GPU nor layout, and
+   these tests are about the screen around it. Its own behaviour — tiles, the
+   camera, the long press — is verified in a browser instead. The stub keeps
+   the one thing the screen depends on: a pin per place that selects it. */
+vi.mock("./TripMap", () => ({
+  TripMap: ({ places, onSelect }: { places: { id: number; name: string }[]; onSelect: (id: number) => void }) => (
+    <div data-testid="map">
+      {places.map((place) => (
+        <button key={place.id} data-testid="pin" data-title={place.name} onClick={() => onSelect(place.id)}>
+          {place.name}
+        </button>
+      ))}
+    </div>
+  ),
+  useDefaultPoint: () => ({ lat: 35.68, lng: 139.76 }),
+}));
+
 vi.mock("../lib/api/places", () => ({
   updatePlace: (id: number, input: unknown) => updatePlace(id, input),
   createPlace: vi.fn(),

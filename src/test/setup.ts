@@ -28,32 +28,3 @@ if (!window.matchMedia) {
       dispatchEvent: () => false,
     }) as MediaQueryList;
 }
-
-/* Leaflet needs a real box to draw a map into and a canvas to draw tiles on;
-   in jsdom it has neither. Every test that renders a screen containing the map
-   is testing the screen, not the map, so the whole library is replaced with
-   something that renders its children and reports what it was asked to show.
-   The map's own behaviour is verified in the browser instead. */
-vi.mock("react-leaflet", async () => {
-  const { createElement } = await import("react");
-
-  return {
-    MapContainer: ({ children }: { children?: React.ReactNode }) =>
-      createElement("div", { "data-testid": "map" }, children),
-    TileLayer: () => null,
-    AttributionControl: () => null,
-    Marker: ({ children, eventHandlers, ...rest }: Record<string, unknown>) =>
-      createElement(
-        "button",
-        {
-          "data-testid": "pin",
-          "data-title": (rest as { title?: string }).title,
-          onClick: (eventHandlers as { click?: () => void } | undefined)?.click,
-        },
-        children as React.ReactNode,
-      ),
-    Popup: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
-    useMap: () => ({ setView: () => {}, fitBounds: () => {}, flyTo: () => {} }),
-    useMapEvents: () => null,
-  };
-});

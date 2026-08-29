@@ -1,6 +1,6 @@
-/* Leaflet first: its own rules are positional, and anything of ours that
-   touches the map has to be able to win. */
-@import "leaflet/dist/leaflet.css";
+/* The map's own stylesheet first: its rules are positional, and anything of
+   ours that touches the map has to be able to win. */
+@import "maplibre-gl/dist/maplibre-gl.css";
 
 @import "@fontsource-variable/fraunces";
 @import "@fontsource-variable/archivo";
