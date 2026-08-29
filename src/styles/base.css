@@ -1,0 +1,125 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Everything below applies to the page itself rather than to a component.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  html {
+    /* Fraunces reads a touch large at the same nominal size. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    /* iOS: keep the ground colour under the safe areas rather than a white
+       band where the home indicator is. */
+    min-height: 100dvh;
+  }
+
+  /* The paper grain. An inline SVG so it costs no request and cannot fail to
+     load; at 3% it is invisible as a texture and obvious in its absence. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    /* Fraunces at display sizes wants less air between letters than its
+       metrics give it. */
+    letter-spacing: -0.02em;
+    font-variation-settings: "SOFT" 20, "WONK" 0;
+  }
+
+  /* One focus ring for the whole app, on the keyboard only. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Anything that animates does so because it helps locate something. When
+     the system says no, everything still arrives — it just arrives at once. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* The small-caps meta line: categories, dates, "3 places". Used often
+     enough to be worth a name. */
+  .stamp {
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* First paint of a list: each card arrives a beat after the one above it.
+     The delay is set inline per index. */
+  .rise {
+    animation: rise 0.5s var(--ease-settle) backwards;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(0.5rem); }
+    to   { opacity: 1; transform: none; }
+  }
+}
+
+/* ── Leaflet, dressed to match ──────────────────────────────────────────
+   The library ships a blue-and-white identity of its own; these overrides
+   are what stop the map from looking like a different app embedded in this
+   one. */
+
+.leaflet-container {
+  font-family: var(--font-body);
+  background: var(--color-sunk);
+}
+
+.leaflet-control-zoom a {
+  color: var(--color-ink) !important;
+  background: var(--color-surface) !important;
+  border-color: var(--color-rule) !important;
+  font-weight: 400 !important;
+}
+
+/* OpenStreetMap's tiles are full-colour. This is what makes them belong to
+   this app: most of the saturation gone, the whole thing lifted towards the
+   paper, and just enough contrast left to read a street from a park. Without
+   it the basemap shouts over the pins, which are the only part that matters. */
+.leaflet-tile {
+  filter: saturate(0.28) brightness(1.07) contrast(0.9) sepia(0.06);
+}
+
+.leaflet-control-attribution {
+  background: rgb(250 247 242 / 0.82) !important;
+  color: var(--color-ink-3) !important;
+  font-size: 0.625rem !important;
+  /* Top-right, where the sheet never reaches. */
+  border-bottom-left-radius: 0.375rem;
+}
+
+.leaflet-control-attribution a {
+  color: var(--color-ink-2) !important;
+}
+
+/* Our pins are divIcons; Leaflet's own box around them has nothing to add. */
+.pin-icon {
+  background: none;
+  border: none;
+}

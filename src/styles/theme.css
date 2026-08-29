@@ -1,0 +1,75 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Field guide — the whole palette and type system, said once.
+
+   A travel journal you happen to be able to tap: warm paper, ink, and one
+   saturated colour per kind of place. The map is deliberately quiet so that
+   the pins you put on it are the loudest thing on the screen.
+
+   Every value here becomes a Tailwind utility (--color-paper → bg-paper), so
+   a component never needs a hex code of its own.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* ── Ground ───────────────────────────────────────────────────────────
+     Paper, not white. The whole app sits on it, and the difference is the
+     difference between a notebook and a form. */
+  --color-paper: #faf7f2;
+  --color-surface: #ffffff;
+  --color-sunk: #f2ece3;
+  --color-rule: #e4ddd2;
+  --color-rule-strong: #cfc5b6;
+
+  /* ── Ink ──────────────────────────────────────────────────────────────
+     Three weights, all of them dark enough to read on paper: 14.9:1, 5.6:1
+     and 4.6:1. There is no fourth, lighter one — a grey that fails contrast
+     is not a design decision. */
+  --color-ink: #1c1a17;
+  --color-ink-2: #635c53;
+  --color-ink-3: #7a7168;
+
+  /* ── Categories ───────────────────────────────────────────────────────
+     One per kind of place: the pin's fill, the card's mark, the filter chip.
+     Chosen dark enough to also be text on paper (all ≥ 4.5:1), because the
+     category is always written as well as coloured — colour alone would
+     leave anyone who can't separate these hues with nothing to read. */
+  --color-food: #b03d10;
+  --color-cafe: #8a5a12;
+  --color-sight: #146955;
+  --color-shopping: #8a3357;
+  --color-other: #4f4a43;
+
+  /* ── Accent ───────────────────────────────────────────────────────────
+     The one non-category colour, used for the thing you are meant to press.
+     Deep enough to carry white text. */
+  --color-accent: #1c1a17;
+  --color-accent-soft: #efe7db;
+
+  /* ── State ────────────────────────────────────────────────────────────── */
+  --color-danger: #a32218;
+  --color-focus: #146955;
+
+  /* ── Type ─────────────────────────────────────────────────────────────
+     A serif with real character against a grotesque that stays out of the
+     way. Fraunces carries the names of things; Archivo carries everything
+     you actually have to read quickly. */
+  --font-display: "Fraunces Variable", "Fraunces", ui-serif, Georgia, serif;
+  --font-body: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Shape ────────────────────────────────────────────────────────────
+     Barely rounded. Paper has corners. */
+  --radius-card: 0.5rem;
+  --radius-sheet: 1.25rem;
+  --radius-pill: 999px;
+
+  /* ── Depth ────────────────────────────────────────────────────────────
+     Warm shadows, never grey ones: a neutral shadow on a warm ground reads
+     as dirt. */
+  --shadow-card: 0 1px 2px rgb(28 26 23 / 0.04), 0 2px 8px rgb(28 26 23 / 0.04);
+  --shadow-sheet: 0 -2px 24px rgb(28 26 23 / 0.13);
+  --shadow-pin: 0 2px 6px rgb(28 26 23 / 0.35);
+
+  /* ── Motion ───────────────────────────────────────────────────────────
+     One curve for everything that moves, so nothing feels borrowed from a
+     different app. Overshoots slightly, the way a sheet settles. */
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+}
