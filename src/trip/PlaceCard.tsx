@@ -1,5 +1,7 @@
 import { categoryOf } from "../lib/categories";
+import { googleMapsUrl } from "../lib/maps";
 import type { Place } from "../lib/api/types";
+import { InstagramMark } from "../ui/InstagramMark";
 import { Stamp } from "../ui/Stamp";
 
 /* An entry in the guide. The name, where it is, the category written as well
@@ -76,6 +78,14 @@ export function PlaceCard({
         </div>
       </button>
 
+      {/* Everything you can do to a place, on one line. Maps goes out to Google
+          because our own map has no Street View or listing, and their embed
+          needs an API key with a card behind it — this is the documented Maps
+          URL, which anyone may link to.
+
+          The links sit here rather than up on the address line, where they
+          belong: an <a> cannot be nested inside a <button>, and the whole card
+          body is the button that selects the pin. */}
       <div className="flex items-center gap-1 border-t border-rule px-2 py-1">
         <button
           type="button"
@@ -86,14 +96,29 @@ export function PlaceCard({
           {place.visited ? "Not yet" : "Been"}
         </button>
 
+        <a
+          href={googleMapsUrl(place)}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={`${place.name} in Google Maps`}
+          className="stamp min-h-9 rounded-card px-2 leading-9 text-ink-2 hover:bg-accent-soft hover:text-ink"
+        >
+          Maps ↗
+        </a>
+
         {place.link ? (
+          /* A mark rather than a word, so it reads as the source it came from
+             rather than as another thing to press. Padded out to the same
+             height as its neighbours all the same: 16px of ink is not a
+             thumb-sized target. */
           <a
             href={place.link}
             target="_blank"
             rel="noreferrer noopener"
-            className="stamp min-h-9 rounded-card px-2 leading-9 text-ink-2 hover:bg-accent-soft hover:text-ink"
+            aria-label={`Post about ${place.name}`}
+            className="flex min-h-9 items-center rounded-card px-2 text-ink-3 hover:bg-accent-soft hover:text-ink"
           >
-            Link ↗
+            <InstagramMark />
           </a>
         ) : null}
 
