@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+import { fetchMyInvitations } from "../lib/api/invitations";
 import { fetchTrips } from "../lib/api/trips";
-import type { Trip } from "../lib/api/types";
+import type { Invitation, Trip } from "../lib/api/types";
 import { parseDate } from "../lib/format";
 import { AppHeader } from "../ui/AppHeader";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
+import { InvitationCard } from "./InvitationCard";
 import { TripCard } from "./TripCard";
 import { TripForm } from "./TripForm";
 
 export function TripsList() {
   const [trips, setTrips] = useState<Trip[] | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
 
@@ -18,10 +21,24 @@ export function TripsList() {
     fetchTrips()
       .then((found) => !cancelled && setTrips(found))
       .catch(() => !cancelled && setFailed(true));
+
+    /* Separately, and allowed to fail quietly: having nothing waiting is the
+       normal case, and an invitations outage should not stop you seeing the
+       trips you already have. */
+    fetchMyInvitations()
+      .then((found) => !cancelled && setInvitations(found))
+      .catch(() => undefined);
+
     return () => {
       cancelled = true;
     };
   }, []);
+
+  /* Asked again rather than patched by hand: an accepted trip arrives with its
+     place count, its people and our role on it already worked out, and none of
+     that is on the invitation. */
+  const forget = (id: number) => setInvitations((current) => current.filter((i) => i.id !== id));
+  const reloadTrips = () => fetchTrips().then(setTrips).catch(() => setFailed(true));
 
   /* Split by the last day of the trip, not the first: you are still on a trip
      on its final morning, and it should not move to "been there" until it is
@@ -52,7 +69,7 @@ export function TripsList() {
           </p>
         ) : null}
 
-        {trips?.length === 0 ? (
+        {trips?.length === 0 && invitations.length === 0 ? (
           <EmptyState
             title="Nothing planned yet"
             body="A trip is a name and a place. The list of things to see comes after."
@@ -62,6 +79,28 @@ export function TripsList() {
               </Button>
             }
           />
+        ) : null}
+
+        {invitations.length > 0 ? (
+          <section className="mt-9">
+            <h2 className="stamp mb-3 flex items-center gap-3 text-ink-3">
+              Invited
+              <span aria-hidden="true" className="h-px flex-1 bg-rule" />
+            </h2>
+            <ul className="flex flex-col gap-3">
+              {invitations.map((invitation) => (
+                <InvitationCard
+                  key={invitation.id}
+                  invitation={invitation}
+                  onAccepted={() => {
+                    forget(invitation.id);
+                    void reloadTrips();
+                  }}
+                  onDeclined={() => forget(invitation.id)}
+                />
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         {upcoming.length > 0 ? (

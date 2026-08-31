@@ -1,22 +1,31 @@
 import { request, unwrap } from "./http";
-import { toRole } from "./people";
-import type { Invitation, InvitationPreview, TripRole } from "./types";
+import { toPerson, toRole } from "./people";
+import type { Invitation, TripRole } from "./types";
 
 export function toInvitation(raw: Record<string, unknown>): Invitation {
+  const trip = (raw.trip ?? {}) as Record<string, unknown>;
+
   return {
     id: Number(raw.id),
-    email: String(raw.email ?? ""),
     role: toRole(raw.role),
-    expiresAt: String(raw.expires_at ?? ""),
+    user: toPerson(raw.user ?? null),
+    invitedBy: toPerson(raw.invited_by ?? null),
+    trip: {
+      id: Number(trip.id),
+      name: String(trip.name ?? ""),
+      destination: String(trip.destination ?? ""),
+      startDate: (trip.start_date as string) ?? null,
+      endDate: (trip.end_date as string) ?? null,
+    },
   };
 }
 
 /**
  * Ask somebody onto a trip.
  *
- * The answer is the same whether or not that address has an account here, so
- * there is nothing to read from it either way — see the API's
- * InvitationController for why that is deliberate.
+ * The address has to belong to an account that already exists — an invitation
+ * is answered inside the app, so there is nowhere to send one otherwise. The
+ * server says so in a 422 on `email`, which the form shows.
  */
 export async function invite(
   tripId: number,
@@ -31,37 +40,29 @@ export async function invite(
   return toInvitation(unwrap(payload));
 }
 
-/**
- * What an invitation link points at.
- *
- * The one call in the app that works with nobody signed in: whoever clicked the
- * link may have no account at all, and the screen has to be able to name the
- * trip before it asks them for anything.
- */
-export async function readInvitation(token: string): Promise<InvitationPreview> {
-  const payload = await request<{ data: Record<string, unknown> }>(
-    `/api/invitations/${encodeURIComponent(token)}`,
-    { allowUnauthorized: true },
-  );
-  const raw = unwrap(payload);
+/** What is waiting on this account to answer. */
+export async function fetchMyInvitations(): Promise<Invitation[]> {
+  const payload = await request<{ data: Record<string, unknown>[] }>("/api/invitations");
 
-  return {
-    tripName: String(raw.trip_name ?? ""),
-    invitedBy: String(raw.invited_by ?? ""),
-    role: toRole(raw.role),
-    email: String(raw.email ?? ""),
-    hasAccount: Boolean(raw.has_account),
-  };
+  return unwrap(payload).map(toInvitation);
 }
 
-/** Take the invitation up. Resolves to the trip it just put you on. */
-export async function acceptInvitation(token: string): Promise<number> {
+/** Take it up. Resolves to the trip it just put you on. */
+export async function acceptInvitation(id: number): Promise<number> {
   const payload = await request<{ data: { trip_id: number } }>(
-    `/api/invitations/${encodeURIComponent(token)}/accept`,
+    `/api/invitations/${id}/accept`,
     { method: "POST" },
   );
 
   return Number(unwrap(payload).trip_id);
+}
+
+/* Declining and revoking are the same row disappearing — the server works out
+   which one it is from who is asking. Two names here because they are two
+   different things to mean, and a caller should not have to think about it. */
+
+export async function declineInvitation(id: number): Promise<void> {
+  await request<void>(`/api/invitations/${id}`, { method: "DELETE" });
 }
 
 export async function revokeInvitation(id: number): Promise<void> {
