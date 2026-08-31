@@ -84,11 +84,12 @@ export function PeopleSheet({
               <ul className="flex flex-col divide-y divide-rule">
                 {people.invitations.map((invitation) => (
                   <li key={invitation.id} className="flex items-center gap-2.5 py-2.5">
-                    {/* No name to draw yet — they may not have an account. */}
-                    <Avatar name={invitation.email} />
+                    <Avatar name={invitation.user?.name ?? "?"} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.9375rem] text-ink">{invitation.email}</p>
-                      <Stamp>Invited · {invitation.role}</Stamp>
+                      <p className="truncate text-[0.9375rem] text-ink">
+                        {invitation.user?.name ?? "Someone"}
+                      </p>
+                      <Stamp>Waiting · {invitation.role}</Stamp>
                     </div>
                     <Button
                       size="sm"
@@ -202,10 +203,7 @@ function InviteForm({ tripId, onSent }: { tripId: number; onSent: () => void }) 
     setSent(null);
     try {
       await invite(tripId, email.trim(), role);
-      /* Deliberately says nothing about whether that address has an account —
-         the API gives the same answer either way, and repeating it here is
-         what keeps this from being a way to find out who has signed up. */
-      setSent(`Invitation sent to ${email.trim()}.`);
+      setSent(`Invited ${email.trim()}. It is waiting in their trips list.`);
       setEmail("");
       onSent();
     } catch (caught) {
@@ -226,6 +224,7 @@ function InviteForm({ tripId, onSent }: { tripId: number; onSent: () => void }) 
         type="email"
         inputMode="email"
         placeholder="them@example.com"
+        hint="They need a Field Guide account already — the invitation waits in their trips list."
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         error={error ?? undefined}
@@ -256,8 +255,8 @@ function InviteForm({ tripId, onSent }: { tripId: number; onSent: () => void }) 
 
       <p className="mt-2 text-[0.8125rem] text-ink-3">
         {role === "editor"
-          ? "They can add places and change the ones already here."
-          : "They can see the trip, and nothing more."}
+          ? "They will be able to add places and change the ones already here."
+          : "They will be able to see the trip, and nothing more."}
       </p>
 
       {sent ? (

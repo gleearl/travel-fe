@@ -21,22 +21,28 @@ export interface Collaborator extends Person {
   email?: string;
 }
 
-/** An invitation sent but not yet taken up. Only the owner is shown these. */
+/**
+ * Somebody asked onto a trip, waiting to answer.
+ *
+ * Read from both ends: the owner sees it in the people sheet and cares about
+ * `user`, while the invited account sees it on their trips list and cares
+ * about `trip` and `invitedBy`.
+ */
 export interface Invitation {
   id: number;
-  email: string;
   role: TripRole;
-  expiresAt: string;
-}
-
-/** What an invitation link resolves to, read before anyone has signed in. */
-export interface InvitationPreview {
-  tripName: string;
-  invitedBy: string;
-  role: TripRole;
-  email: string;
-  /** Whether that address already has an account, so we offer the right door. */
-  hasAccount: boolean;
+  /** Who was asked. */
+  user: Person | null;
+  /** Who asked them. */
+  invitedBy: Person | null;
+  /** Enough to draw the card without opening a trip you cannot open yet. */
+  trip: {
+    id: number;
+    name: string;
+    destination: string;
+    startDate: string | null;
+    endDate: string | null;
+  };
 }
 
 export interface Trip {

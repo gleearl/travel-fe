@@ -30,7 +30,6 @@ npm run build
 src/
   lib/api/      every call to the server, and the only place that knows the wire format
   auth/         the token, the four sign-in screens, and the route guard
-  invitations/  where a mailed invitation link lands
   trips/        the list and the trip form
   trip/         the map screen: map, sheet, place list, place form, people sheet
   ui/           the pieces every screen is built from
@@ -93,10 +92,14 @@ borrows the idiom the app already speaks: the owner is inked in, everyone else
 sits on paper, the same filled-versus-hollow distinction that separates a place
 you have been from one you have not.
 
-`/invitations/:token` is the one screen outside the auth guard. Whoever clicked
-that link may have no account at all, so it names the trip and who sent it
-before asking them for anything. Signing up from there claims the invitation on
-the way through, so nobody has to come back and press accept.
+**Invitations are answered in the app**, not by email. One waiting on you
+appears as its own card at the top of the trips list — the trip's name, who
+asked, what you would be able to do, and Accept or Decline. It looks like a
+`TripCard` because it is about to become one, but deliberately is not a link:
+accepting is what grants access, so a pressable card would lead to a 404.
+Accepting refetches the list rather than patching it, because the trip arrives
+with a place count, its people and your role already worked out, none of which
+is on the invitation.
 
 **Auth is a bearer token**, kept in `localStorage` and attached by
 `src/lib/api/http.ts`. Not a cookie: the app is served from `github.io` and the
