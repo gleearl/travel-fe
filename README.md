@@ -13,10 +13,10 @@ npm install
 npm run dev
 ```
 
-That's `http://localhost:5173/travel-fe/` — the sub-path is deliberate, because
-GitHub Pages serves the app from `/travel-fe/` and a base path that only exists
-in production is a base path nobody tests. Start the API in the other repo
-first; `.env.development` already points at it.
+That's `http://localhost:5173/`. The app is served from the root of
+`travel.gleearl.com`, and dev matches it — a base path that only exists in
+production is a base path nobody tests. Start the API in the other repo first;
+`.env.development` already points at it.
 
 ```bash
 npm test        # vitest
