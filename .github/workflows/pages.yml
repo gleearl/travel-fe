@@ -1,13 +1,20 @@
 name: Deploy to Pages
 
+# `push` publishes. `pull_request` runs the tests and the build before the
+# merge rather than after it — a failure found on main is a failure found with
+# main already broken, and Pages left serving the last good build with no sign
+# that the next one did not make it.
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
-# One deploy at a time, and don't cancel one halfway.
+# One deploy at a time, and don't cancel one halfway. Keyed by ref so a pull
+# request checks itself without queueing behind — or holding up — a publish.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -44,13 +51,18 @@ jobs:
       - name: Fall back to the app shell
         run: cp dist/index.html dist/404.html
 
+      # Everything above runs on a pull request; nothing below it does. A PR is
+      # asking whether this is safe to merge, not asking to be published.
       - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: dist
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
