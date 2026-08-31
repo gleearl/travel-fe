@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { CATEGORIES, type Category } from "../lib/categories";
+import { useEffect, useState } from "react";
+import { CATEGORIES, categoryOf, type Category } from "../lib/categories";
 import { searchPlaces } from "../lib/api/geocode";
+import { searchLibrary } from "../lib/api/library";
 import { resolveMapLink } from "../lib/api/mapLink";
 import { suggestPlaceName } from "../lib/instagram";
 import { looksLikeMapsLink } from "../lib/maps";
 import { ApiError } from "../lib/api/http";
 import { createPlace, deletePlace, updatePlace } from "../lib/api/places";
-import type { GeocodeResult, Place, PlaceInput } from "../lib/api/types";
+import type { GeocodeResult, LibraryPlace, Place, PlaceInput } from "../lib/api/types";
 import { Button } from "../ui/Button";
 import { Field, TextArea } from "../ui/Field";
 import { Sheet } from "../ui/Sheet";
@@ -95,11 +96,10 @@ export function PlaceForm({
       }
     >
       {!place ? (
-        <PlaceSearch
-          onPick={(hit) => {
-            setForm((f) => ({ ...f, name: hit.name, address: hit.address, lat: hit.lat, lng: hit.lng }));
-          }}
-        />
+        /* Whatever the search found, merged over what is already typed. The
+           geocoder knows a name and a point; a place you saved before knows
+           its category, its link and the note you left on it too. */
+        <PlaceSearch onPick={(found) => setForm((f) => ({ ...f, ...found }))} />
       ) : null}
 
       <form id="place-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
@@ -215,21 +215,62 @@ export function PlaceForm({
   );
 }
 
-/* Search, on submit rather than on every keystroke.
+/** How long typing has to stop before the library is asked. */
+const SETTLE_MS = 200;
 
-   Nominatim's usage policy is roughly a request a second, and an autocomplete
-   would spend that on a single word. The button is the honest version of the
-   constraint, and the API caches every answer besides. */
-function PlaceSearch({ onPick }: { onPick: (hit: GeocodeResult) => void }) {
+/* Finding a place, two ways over one field.
+
+   **Your own places, as you type.** A trip is a new list every time, but the
+   places on it rarely are — the coffee shop worth going back to is worth
+   putting on next year's trip too. Those come from our own database, so this
+   half can answer on every keystroke; it waits only long enough for typing to
+   stop, so a word costs one query rather than one per letter.
+
+   **Everywhere else, on submit.** Nominatim's usage policy is roughly a
+   request a second, and an autocomplete would spend that on a single word. The
+   button is the honest version of that constraint, and the API caches every
+   answer besides.
+
+   The two are stacked rather than merged: somewhere you have already been is a
+   different kind of answer from somewhere the map has heard of, and a list that
+   blurred them would hide the shortcut inside the long way round. */
+function PlaceSearch({ onPick }: { onPick: (found: Partial<PlaceInput>) => void }) {
   const [query, setQuery] = useState("");
+  const [saved, setSaved] = useState<LibraryPlace[]>([]);
   const [hits, setHits] = useState<GeocodeResult[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
+  /* ── Places you have saved before ─────────────────────────────────── */
+  useEffect(() => {
+    const term = query.trim();
+
+    /* Below two characters everything matches, and a suggestion that is always
+       there is not a suggestion. A pasted link is not a name being typed. */
+    if (term.length < 2 || looksLikeMapsLink(term)) {
+      setSaved([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      searchLibrary(term)
+        .then((found) => !cancelled && setSaved(found))
+        /* Quietly: the geocoder below is still there, and a suggestion that
+           failed to arrive is not something anyone can act on. */
+        .catch(() => !cancelled && setSaved([]));
+    }, SETTLE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  /* ── Everywhere else ──────────────────────────────────────────────── */
   async function search(event: React.FormEvent) {
     event.preventDefault();
     if (query.trim().length < 2) return;
-
 
     setBusy(true);
     setFailed(null);
@@ -255,6 +296,13 @@ function PlaceSearch({ onPick }: { onPick: (hit: GeocodeResult) => void }) {
     }
   }
 
+  /** Taken up: the form is filled, and there is nothing left to choose. */
+  function take(found: Partial<PlaceInput>) {
+    onPick(found);
+    setSaved([]);
+    setHits(null);
+  }
+
   return (
     <div className="mb-6 rounded-card border border-rule bg-sunk/60 p-3">
       <form onSubmit={search} className="flex items-end gap-2">
@@ -270,6 +318,40 @@ function PlaceSearch({ onPick }: { onPick: (hit: GeocodeResult) => void }) {
           {busy ? "…" : "Search"}
         </Button>
       </form>
+
+      {saved.length > 0 ? (
+        <>
+          {/* Said only when there is something to say — the heading appearing
+              as you type is how anyone finds out this exists at all. */}
+          <h3 className="stamp mt-3 mb-1 flex items-center gap-3 text-ink-3">
+            Saved before
+            <span aria-hidden="true" className="h-px flex-1 bg-rule" />
+          </h3>
+          <ul className="flex flex-col divide-y divide-rule">
+            {saved.map((place) => (
+              <li key={`${place.name}|${place.lat},${place.lng}`}>
+                <button
+                  type="button"
+                  onClick={() => take(place)}
+                  className="w-full rounded-card px-1.5 py-2.5 text-left hover:bg-accent-soft"
+                >
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[0.9375rem] text-ink">{place.name}</span>
+                    <Stamp color={categoryOf(place.category).color} className="shrink-0">
+                      {categoryOf(place.category).label}
+                    </Stamp>
+                  </span>
+                  {/* Which trip it is from, because a name on its own is not
+                      always enough to know which of two places this is. */}
+                  <span className="mt-0.5 block truncate text-[0.8125rem] leading-snug text-ink-3">
+                    {place.tripName ? `From ${place.tripName}` : place.address}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
 
       {failed ? (
         <p role="alert" className="mt-2 text-[0.8125rem] text-danger">
@@ -289,10 +371,7 @@ function PlaceSearch({ onPick }: { onPick: (hit: GeocodeResult) => void }) {
             <li key={`${hit.lat},${hit.lng}`}>
               <button
                 type="button"
-                onClick={() => {
-                  onPick(hit);
-                  setHits(null);
-                }}
+                onClick={() => take(hit)}
                 className="w-full rounded-card px-1.5 py-2.5 text-left hover:bg-accent-soft"
               >
                 <span className="block text-[0.9375rem] text-ink">{hit.name}</span>
