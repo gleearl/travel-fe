@@ -1,4 +1,5 @@
 import { CATEGORY_IDS, type Category } from "../categories";
+import { toPerson } from "./people";
 import { request, unwrap } from "./http";
 import type { Place, PlaceInput } from "./types";
 
@@ -17,6 +18,7 @@ export function toPlace(raw: Record<string, unknown>): Place {
     notes: String(raw.notes ?? ""),
     visited: Boolean(raw.visited),
     position: Number(raw.position ?? 0),
+    addedBy: toPerson(raw.added_by ?? null),
   };
 }
 

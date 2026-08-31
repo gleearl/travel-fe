@@ -1,4 +1,6 @@
 import type { Category } from "../lib/categories";
+import type { TripRole } from "../lib/api/types";
+import { AvatarStack } from "../ui/Avatar";
 import { countLabel, formatDateRange } from "../lib/format";
 import type { Place, Trip } from "../lib/api/types";
 import { Button } from "../ui/Button";
@@ -23,6 +25,8 @@ export function PlacePanel({
   onToggleVisited,
   onAdd,
   onEditTrip,
+  role,
+  onShowPeople,
 }: {
   trip: Trip;
   /** Every place on the trip, for the counts. */
@@ -38,8 +42,12 @@ export function PlacePanel({
   onToggleVisited: (place: Place) => void;
   onAdd: () => void;
   onEditTrip: () => void;
+  /** What this account may do here. The only thing gating any control below. */
+  role: TripRole;
+  onShowPeople: () => void;
 }) {
   const seen = places.filter((p) => p.visited).length;
+  const canEdit = role !== "viewer";
 
   return (
     <>
@@ -53,16 +61,25 @@ export function PlacePanel({
             <Stamp>{formatDateRange(trip.startDate, trip.endDate)}</Stamp>
             <Stamp>{countLabel(places.length, "place")}</Stamp>
             {seen > 0 ? <Stamp color="var(--color-sight)">{seen} seen</Stamp> : null}
+            {/* Said out loud, because otherwise the missing buttons below read
+                as something that failed to load rather than as a fact about
+                what this account may do. */}
+            {!canEdit ? <Stamp>View only</Stamp> : null}
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-1.5">
-          <Button size="sm" onClick={onEditTrip}>
-            Edit
-          </Button>
-          <Button size="sm" variant="primary" onClick={onAdd}>
-            Add place
-          </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <AvatarStack owner={trip.owner} collaborators={trip.collaborators} onClick={onShowPeople} />
+          {canEdit ? (
+            <>
+              <Button size="sm" onClick={onEditTrip}>
+                Edit
+              </Button>
+              <Button size="sm" variant="primary" onClick={onAdd}>
+                Add place
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -75,11 +92,17 @@ export function PlacePanel({
       {places.length === 0 ? (
         <EmptyState
           title="No places yet"
-          body="Search for somewhere, or press and hold the map where you want a pin."
+          body={
+            canEdit
+              ? "Search for somewhere, or press and hold the map where you want a pin."
+              : "Nothing has been added to this trip yet."
+          }
           action={
-            <Button variant="primary" onClick={onAdd}>
-              Add the first place
-            </Button>
+            canEdit ? (
+              <Button variant="primary" onClick={onAdd}>
+                Add the first place
+              </Button>
+            ) : undefined
           }
         />
       ) : null}
@@ -99,6 +122,8 @@ export function PlacePanel({
             onSelect={() => onSelect(place.id)}
             onEdit={() => onEdit(place)}
             onToggleVisited={() => onToggleVisited(place)}
+            canEdit={canEdit}
+            ownerId={trip.owner?.id ?? null}
           />
         ))}
       </ul>

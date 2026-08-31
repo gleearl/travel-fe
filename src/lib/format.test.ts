@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countLabel, formatDateRange, parseDate } from "./format";
+import { countLabel, formatDateRange, initials, parseDate } from "./format";
 
 describe("dates", () => {
   it("reads an API date as a local day, not as UTC midnight", () => {
@@ -34,5 +34,37 @@ describe("counts", () => {
     expect(countLabel(1, "place")).toBe("1 place");
     expect(countLabel(0, "place")).toBe("0 places");
     expect(countLabel(14, "place")).toBe("14 places");
+  });
+});
+
+describe("initials", () => {
+  it("takes the first letter of the first and last name", () => {
+    expect(initials("Glee Earl")).toBe("GE");
+  });
+
+  it("gives one letter to a one-word name", () => {
+    expect(initials("Prince")).toBe("P");
+  });
+
+  it("skips the middle names rather than stacking up four letters", () => {
+    /* An avatar is a circle about the size of a fingernail. Two letters is
+       what fits. */
+    expect(initials("Ana Maria Lopez Reyes")).toBe("AR");
+  });
+
+  it("is not confused by the spacing people actually type", () => {
+    expect(initials("  ana   lopez  ")).toBe("AL");
+  });
+
+  it("works on a name that is not in the Latin alphabet", () => {
+    expect(initials("陳 大文")).toBe("陳大");
+    expect(initials("Ольга Иванова")).toBe("ОИ");
+  });
+
+  it("falls back to something rather than an empty circle", () => {
+    /* A name should never be blank, but a blank avatar reads as a rendering
+       failure, and "?" reads as a person we know nothing about. */
+    expect(initials("")).toBe("?");
+    expect(initials("   ")).toBe("?");
   });
 });

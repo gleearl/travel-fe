@@ -15,6 +15,7 @@ const place = (over: Partial<Place> = {}): Place => ({
   notes: "",
   visited: false,
   position: 1,
+  addedBy: null,
   ...over,
 });
 

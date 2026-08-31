@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { CATEGORY_IDS, type Category } from "../lib/categories";
 import { updatePlace } from "../lib/api/places";
 import { fetchTrip } from "../lib/api/trips";
@@ -8,6 +8,7 @@ import { DESKTOP, useMediaQuery } from "../lib/useMediaQuery";
 import { AppHeader } from "../ui/AppHeader";
 import { TripForm } from "../trips/TripForm";
 import { BottomSheet, type Snap } from "./BottomSheet";
+import { PeopleSheet } from "./PeopleSheet";
 import { PlaceForm } from "./PlaceForm";
 import { PlacePanel } from "./PlacePanel";
 import { TripMap, useDefaultPoint } from "./TripMap";
@@ -17,6 +18,7 @@ type Editing = { kind: "new"; at: { lat: number; lng: number } } | { kind: "exis
 
 export function TripDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const tripId = Number(id);
   const desktop = useMediaQuery(DESKTOP);
 
@@ -27,6 +29,7 @@ export function TripDetail() {
   const [snap, setSnap] = useState<Snap>("half");
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTrip, setEditingTrip] = useState(false);
+  const [showingPeople, setShowingPeople] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +42,12 @@ export function TripDetail() {
   }, [tripId]);
 
   const places = useMemo(() => trip?.places ?? [], [trip]);
+
+  /* One field decides every control on this screen. A viewer reads the trip
+     and follows its links; anything that would change it is not drawn at all,
+     with a "View only" stamp saying why rather than leaving the gaps to be
+     read as something failing to load. */
+  const canEdit = trip !== null && trip.role !== "viewer";
 
   const counts = useMemo(() => {
     const tally = Object.fromEntries(CATEGORY_IDS.map((c) => [c, 0])) as Record<Category, number>;
@@ -77,6 +86,8 @@ export function TripDetail() {
   }, []);
 
   async function toggleVisited(place: Place) {
+    if (!canEdit) return;
+
     // Optimistic: the pin and the card change under the thumb that pressed them.
     const next = { ...place, visited: !place.visited };
     replacePlace(next);
@@ -126,6 +137,8 @@ export function TripDetail() {
       onToggleVisited={toggleVisited}
       onAdd={() => setEditing({ kind: "new", at: defaultPoint })}
       onEditTrip={() => setEditingTrip(true)}
+      role={trip.role}
+      onShowPeople={() => setShowingPeople(true)}
     />
   );
 
@@ -152,7 +165,10 @@ export function TripDetail() {
             places={visible}
             selectedId={selectedId}
             onSelect={selectFromMap}
-            onDropPin={(at) => setEditing({ kind: "new", at })}
+            /* A long press on open map means "a place here", which a viewer
+               cannot make — opening the form for them would be offering a save
+               button that can only fail. */
+            onDropPin={(at) => canEdit && setEditing({ kind: "new", at })}
             /* The rail sits beside the map, so it hides nothing; the sheet
                sits over it and hides half. */
             bottomPadding={desktop ? 72 : Math.round(window.innerHeight * 0.45)}
@@ -184,6 +200,15 @@ export function TripDetail() {
             setSelectedId((current) => (current === deletedId ? null : current));
             setEditing(null);
           }}
+        />
+      ) : null}
+
+      {showingPeople ? (
+        <PeopleSheet
+          tripId={trip.id}
+          role={trip.role}
+          onClose={() => setShowingPeople(false)}
+          onLeft={() => navigate("/", { replace: true })}
         />
       ) : null}
 

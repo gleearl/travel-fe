@@ -19,6 +19,7 @@ const place = (over: Partial<Place>): Place => ({
   notes: "",
   visited: false,
   position: 1,
+  addedBy: null,
   ...over,
 });
 
@@ -31,6 +32,9 @@ const TRIP: Trip = {
   startDate: "2026-03-04",
   endDate: "2026-03-18",
   placeCount: 3,
+  role: "owner",
+  owner: { id: 99, name: "Glee Earl" },
+  collaborators: [],
   places: [
     place({
       id: 1,
@@ -40,7 +44,13 @@ const TRIP: Trip = {
       link: "https://instagram.com/p/abc123",
       notes: "try the honey toast",
     }),
-    place({ id: 2, name: "teamLab Borderless", category: "sight", visited: true }),
+    place({
+      id: 2,
+      name: "teamLab Borderless",
+      category: "sight",
+      visited: true,
+      addedBy: { id: 4, name: "Ana Lopez" },
+    }),
     place({ id: 3, name: "Ichiran", category: "food" }),
   ],
 };
@@ -59,13 +69,25 @@ vi.mock("../lib/api/trips", () => ({
    camera, the long press — is verified in a browser instead. The stub keeps
    the one thing the screen depends on: a pin per place that selects it. */
 vi.mock("./TripMap", () => ({
-  TripMap: ({ places, onSelect }: { places: { id: number; name: string }[]; onSelect: (id: number) => void }) => (
+  TripMap: ({
+    places,
+    onSelect,
+    onDropPin,
+  }: {
+    places: { id: number; name: string }[];
+    onSelect: (id: number) => void;
+    onDropPin: (at: { lat: number; lng: number }) => void;
+  }) => (
     <div data-testid="map">
       {places.map((place) => (
         <button key={place.id} data-testid="pin" data-title={place.name} onClick={() => onSelect(place.id)}>
           {place.name}
         </button>
       ))}
+      {/* Stands in for the long press that drops a pin on open map. */}
+      <button data-testid="drop-pin" onClick={() => onDropPin({ lat: 35.7, lng: 139.8 })}>
+        drop a pin
+      </button>
     </div>
   ),
   useDefaultPoint: () => ({ lat: 35.68, lng: 139.76 }),
@@ -80,6 +102,20 @@ vi.mock("../lib/api/mapLink", () => ({
 
 vi.mock("../lib/api/geocode", () => ({
   searchPlaces: (query: string) => searchPlaces(query),
+}));
+
+const fetchMembers = vi.fn();
+
+vi.mock("../lib/api/members", () => ({
+  fetchMembers: (tripId: number) => fetchMembers(tripId),
+  setMemberRole: vi.fn(),
+  removeMember: vi.fn(),
+  leaveTrip: vi.fn(),
+}));
+
+vi.mock("../lib/api/invitations", () => ({
+  invite: vi.fn(),
+  revokeInvitation: vi.fn(),
 }));
 
 vi.mock("../lib/api/places", () => ({
@@ -105,7 +141,18 @@ beforeEach(() => {
   updatePlace.mockReset().mockImplementation((id, input) => Promise.resolve({ ...input, id }));
   searchPlaces.mockReset().mockResolvedValue([]);
   resolveMapLink.mockReset();
+  fetchMembers.mockReset().mockResolvedValue({
+    owner: { id: 99, name: "Glee Earl", role: "owner" },
+    members: [],
+    invitations: [],
+  });
 });
+
+/** Opens the trip as somebody with the given role on it. */
+function openAs(role: "owner" | "editor" | "viewer", over: Partial<Trip> = {}) {
+  fetchTrip.mockResolvedValue({ ...structuredClone(TRIP), role, ...over });
+  open();
+}
 
 /** Opens the add-place sheet and returns the search field inside it. */
 async function openSearch(user: ReturnType<typeof userEvent.setup>) {
@@ -297,5 +344,90 @@ describe("the trip screen", () => {
     open();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't open that trip.");
+  });
+
+  /* ── Sharing ─────────────────────────────────────────────────────── */
+
+  it("shows a viewer the trip without any of the controls that change it", async () => {
+    openAs("viewer");
+
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    expect(screen.queryByRole("button", { name: "Add place" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Been" })).not.toBeInTheDocument();
+  });
+
+  it("tells a viewer why those controls are missing", async () => {
+    /* Otherwise the absence reads as something failing to load. */
+    openAs("viewer");
+
+    expect(await screen.findByText("View only")).toBeInTheDocument();
+  });
+
+  it("still lets a viewer follow a place out to Google Maps", async () => {
+    /* Read-only is not the same as inert — the links are the point of being
+       shown a trip at all. */
+    openAs("viewer");
+
+    const card = (await screen.findByRole("heading", { name: "Fuglen Asakusa" })).closest("li")!;
+    expect(within(card).getByRole("link", { name: "Fuglen Asakusa in Google Maps" })).toBeInTheDocument();
+  });
+
+  it("gives an editor everything except the guest list", async () => {
+    openAs("editor");
+
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    expect(screen.getByRole("button", { name: "Add place" })).toBeInTheDocument();
+    expect(screen.queryByText("View only")).not.toBeInTheDocument();
+
+    const card = screen.getByRole("heading", { name: "Ichiran" }).closest("li")!;
+    expect(within(card).getByRole("button", { name: "Been" })).toBeInTheDocument();
+  });
+
+  it("will not open the place form when a viewer presses the map", async () => {
+    /* The map long-press drops a pin. For a viewer that would open a form
+       whose save button can only ever fail. */
+    const user = userEvent.setup();
+    openAs("viewer");
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    await user.click(screen.getByTestId("drop-pin"));
+
+    expect(screen.queryByRole("dialog", { name: "Add a place" })).not.toBeInTheDocument();
+  });
+
+  it("draws everyone on the trip as their initials", async () => {
+    openAs("owner", {
+      collaborators: [
+        { id: 4, name: "Ana Lopez", role: "editor" },
+        { id: 5, name: "Bo Chen", role: "viewer" },
+      ],
+    });
+
+    const people = await screen.findByRole("button", { name: /3 people on this trip/i });
+
+    expect(within(people).getByText("GE")).toBeInTheDocument();
+    expect(within(people).getByText("AL")).toBeInTheDocument();
+    expect(within(people).getByText("BC")).toBeInTheDocument();
+  });
+
+  it("says who added a place, where somebody else did", async () => {
+    openAs("owner");
+
+    const card = (await screen.findByRole("heading", { name: "teamLab Borderless" })).closest("li")!;
+
+    expect(within(card).getByTitle("Added by Ana Lopez")).toBeInTheDocument();
+  });
+
+  it("opens the people sheet from the avatars", async () => {
+    const user = userEvent.setup();
+    openAs("owner", { collaborators: [{ id: 4, name: "Ana Lopez", role: "editor" }] });
+
+    await user.click(await screen.findByRole("button", { name: /2 people on this trip/i }));
+
+    expect(await screen.findByRole("dialog", { name: "People on this trip" })).toBeInTheDocument();
+    expect(fetchMembers).toHaveBeenCalledWith(7);
   });
 });
