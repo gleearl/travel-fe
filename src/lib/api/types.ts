@@ -108,3 +108,23 @@ export interface GeocodeResult {
   lat: number;
   lng: number;
 }
+
+/**
+ * A place saved on an earlier trip, offered while a new one is being typed.
+ *
+ * Fields to copy, not a place to point at: picking one fills the form, and
+ * saving writes a new place on this trip. That is what keeps the notes and the
+ * "been there" of one trip from being the answer for every trip — so there is
+ * deliberately no id here, and neither `visited` nor `position` travels.
+ */
+export interface LibraryPlace {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  category: Category;
+  link: string;
+  notes: string;
+  /** The trip it was last saved on, to tell two similar names apart. */
+  tripName: string;
+}

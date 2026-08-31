@@ -78,6 +78,21 @@ the API to OpenStreetMap's Nominatim, whose usage policy is about a request a
 second — a per-keystroke search would spend that on a single word. Pressing and
 holding the map drops a pin anywhere instead.
 
+**Places you have saved before are the exception, and they do autocomplete.** A
+trip is a new list every time, but the places on it rarely are — the coffee shop
+worth going back to belongs on next year's trip too. Those come from our own
+database rather than Nominatim, so that half of the "Find it" field answers as
+you type; it waits 200ms for typing to stop, so a word costs one query rather
+than one per letter. They appear above the geocoder's results under a `Saved
+before` heading, which only exists when there is something under it.
+
+Picking one **copies its fields onto this trip** — name, address, point,
+category, link, and the notes, which are the part actually worth remembering.
+It does not link to the old place: `visited` and the notes are facts about *a
+trip*, and one shared row would make "been there" a single answer for every trip
+you ever put that place on. So `LibraryPlaceResource` deliberately sends no id,
+and there is nothing for a later request to point at.
+
 **Trips can be shared.** The server sends one field — `role`, being *your* role
 on that trip — and every control on the screen is drawn or not drawn from it. A
 viewer gets no "Add place", no "Edit", no "Been", and the map's long-press is

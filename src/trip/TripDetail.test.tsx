@@ -95,6 +95,7 @@ vi.mock("./TripMap", () => ({
 
 const searchPlaces = vi.fn();
 const resolveMapLink = vi.fn();
+const searchLibrary = vi.fn();
 
 vi.mock("../lib/api/mapLink", () => ({
   resolveMapLink: (url: string) => resolveMapLink(url),
@@ -102,6 +103,10 @@ vi.mock("../lib/api/mapLink", () => ({
 
 vi.mock("../lib/api/geocode", () => ({
   searchPlaces: (query: string) => searchPlaces(query),
+}));
+
+vi.mock("../lib/api/library", () => ({
+  searchLibrary: (query: string) => searchLibrary(query),
 }));
 
 const fetchMembers = vi.fn();
@@ -141,6 +146,7 @@ beforeEach(() => {
   updatePlace.mockReset().mockImplementation((id, input) => Promise.resolve({ ...input, id }));
   searchPlaces.mockReset().mockResolvedValue([]);
   resolveMapLink.mockReset();
+  searchLibrary.mockReset().mockResolvedValue([]);
   fetchMembers.mockReset().mockResolvedValue({
     owner: { id: 99, name: "Glee Earl", role: "owner" },
     members: [],
@@ -162,11 +168,31 @@ async function openSearch(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByLabelText("Find it");
 }
 
+/* The one row in the "Saved before" list, found by the line naming the trip it
+   came from. Deliberately not by its name: the same place is also a pin on the
+   map behind the sheet and a card in the list, and all three say "Fuglen
+   Asakusa" — which line tells them apart is exactly what the trip line is for. */
+async function savedSuggestion(): Promise<HTMLElement> {
+  return (await screen.findByText(`From ${SAVED.tripName}`)).closest("button")!;
+}
+
 const FUGLEN = {
   name: "Fuglen Asakusa",
   address: "Fuglen Asakusa, 2-6-15, Asakusa, Taito City, Tokyo",
   lat: 35.7148231,
   lng: 139.7967412,
+};
+
+/** The same place, as it comes back from an earlier trip. */
+const SAVED = {
+  name: "Fuglen Asakusa",
+  address: "2-6-15 Asakusa, Taito City",
+  lat: 35.7148231,
+  lng: 139.7967412,
+  category: "cafe" as const,
+  link: "https://instagram.com/fuglen.coffee",
+  notes: "go early, the honey toast sells out",
+  tripName: "Japan 2024",
 };
 
 describe("the trip screen", () => {
@@ -337,6 +363,121 @@ describe("the trip screen", () => {
     await user.tab();
 
     expect(screen.getByLabelText("Place")).toHaveValue("Fuglen, the good one");
+  });
+
+  /* ── Places saved on an earlier trip ─────────────────────────────── */
+
+  it("offers a place you saved before, as you type", async () => {
+    const user = userEvent.setup();
+    searchLibrary.mockResolvedValue([SAVED]);
+    open();
+
+    await user.type(await openSearch(user), "fugl");
+
+    /* No button pressed. These come from our own database, so unlike the
+       geocoder below they can answer while you are still typing. */
+    expect(await screen.findByText("Saved before")).toBeInTheDocument();
+    expect(screen.getByText("From Japan 2024")).toBeInTheDocument();
+    expect(searchPlaces).not.toHaveBeenCalled();
+  });
+
+  it("fills the whole form from a saved place, notes and all", async () => {
+    const user = userEvent.setup();
+    searchLibrary.mockResolvedValue([SAVED]);
+    open();
+
+    await user.type(await openSearch(user), "fugl");
+    await user.click(await savedSuggestion());
+
+    /* The point of remembering a place is the part you wrote down about it —
+       a name and a pin you could have found again yourself. */
+    expect(screen.getByLabelText("Place")).toHaveValue("Fuglen Asakusa");
+    expect(screen.getByLabelText("Address")).toHaveValue(SAVED.address);
+    expect(screen.getByLabelText("Notes")).toHaveValue("go early, the honey toast sells out");
+    expect(screen.getByLabelText("Link")).toHaveValue("https://instagram.com/fuglen.coffee");
+    expect(screen.getByRole("button", { name: /^Cafe/, pressed: true })).toBeInTheDocument();
+    expect(screen.getByText(/Pin at 35.71482, 139.79674/)).toBeInTheDocument();
+  });
+
+  it("does not carry 'been there' onto a trip you have not taken yet", async () => {
+    const user = userEvent.setup();
+    searchLibrary.mockResolvedValue([SAVED]);
+    open();
+
+    await user.type(await openSearch(user), "fugl");
+    await user.click(await savedSuggestion());
+
+    expect(screen.getByRole("checkbox", { name: /Been there already/ })).not.toBeChecked();
+  });
+
+  it("puts the list away once you have taken one", async () => {
+    const user = userEvent.setup();
+    searchLibrary.mockResolvedValue([SAVED]);
+    open();
+
+    await user.type(await openSearch(user), "fugl");
+    await user.click(await savedSuggestion());
+
+    expect(screen.queryByText("Saved before")).not.toBeInTheDocument();
+  });
+
+  it("waits for typing to stop rather than asking once per letter", async () => {
+    const user = userEvent.setup();
+    searchLibrary.mockResolvedValue([SAVED]);
+    open();
+
+    await user.type(await openSearch(user), "fuglen");
+    await screen.findByText("Saved before");
+
+    /* Six letters, and nowhere near six queries. The debounce is the whole
+       reason this can run on a keystroke at all. */
+    expect(searchLibrary.mock.calls.length).toBeLessThan(4);
+  });
+
+  it("says nothing when you have never saved anything like it", async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.type(await openSearch(user), "somewhere new");
+
+    expect(screen.queryByText("Saved before")).not.toBeInTheDocument();
+  });
+
+  it("does not go looking for a saved place when what you pasted is a link", async () => {
+    /* A shared link names one place exactly. There is nothing to suggest. */
+    const user = userEvent.setup();
+    open();
+
+    await user.type(await openSearch(user), "https://maps.app.goo.gl/aB3xY9");
+
+    expect(searchLibrary).not.toHaveBeenCalled();
+  });
+
+  it("still lets the geocoder answer for somewhere you have never been", async () => {
+    const user = userEvent.setup();
+    searchLibrary.mockResolvedValue([]);
+    searchPlaces.mockResolvedValue([FUGLEN]);
+    open();
+
+    await user.type(await openSearch(user), "fuglen asakusa");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByText(FUGLEN.address)).toBeInTheDocument();
+  });
+
+  it("carries on without suggestions when the library cannot be reached", async () => {
+    /* Nothing anyone can act on, so nothing is said about it — the search
+       button below is still there and still works. */
+    const user = userEvent.setup();
+    searchLibrary.mockRejectedValue(new Error("offline"));
+    searchPlaces.mockResolvedValue([FUGLEN]);
+    open();
+
+    await user.type(await openSearch(user), "fuglen");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByText(FUGLEN.address)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("says so plainly when the trip can't be loaded", async () => {
