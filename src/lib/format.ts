@@ -43,3 +43,21 @@ export function countLabel(n: number, noun: string): string {
 function short(date: Date): string {
   return `${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
+
+/* The letters that stand in for somebody's face.
+
+   First and last, never the middle ones: an avatar is a circle about the size
+   of a fingernail, and "AMLR" in it is a smudge. Taken with the spread operator
+   rather than charAt so that a name outside the Latin alphabet — or one
+   starting with an emoji — yields one whole character instead of half of a
+   surrogate pair. */
+export function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) return "?";
+
+  const first = [...words[0]][0] ?? "";
+  const last = words.length > 1 ? ([...words[words.length - 1]][0] ?? "") : "";
+
+  return (first + last).toUpperCase();
+}

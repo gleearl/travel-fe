@@ -1,4 +1,5 @@
 import { request, unwrap } from "./http";
+import { toCollaborator, toPerson, toRole } from "./people";
 import { toPlace } from "./places";
 import type { Trip, TripInput } from "./types";
 
@@ -15,6 +16,16 @@ export function toTrip(raw: Record<string, unknown>): Trip {
     startDate: (raw.start_date as string) ?? null,
     endDate: (raw.end_date as string) ?? null,
     placeCount: Number(raw.place_count ?? 0),
+    /* Two different absences, two different answers. No role *field* at all is
+       a response from before sharing existed, which can only be a trip of your
+       own — the server sends nobody else's — so guessing "viewer" would lock
+       people out of their own trips. A role that is present but unrecognised is
+       something else entirely, and gets the cautious reading. */
+    role: raw.role === undefined || raw.role === null ? "owner" : toRole(raw.role),
+    owner: toPerson(raw.owner ?? null),
+    collaborators: Array.isArray(raw.collaborators)
+      ? (raw.collaborators as Record<string, unknown>[]).map(toCollaborator)
+      : [],
     places: Array.isArray(raw.places)
       ? (raw.places as Record<string, unknown>[]).map(toPlace)
       : [],

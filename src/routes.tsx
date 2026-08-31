@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router";
+import { AcceptInvitation } from "./invitations/AcceptInvitation";
 import { ForgotPassword } from "./auth/ForgotPassword";
 import { RequireAuth } from "./auth/RequireAuth";
 import { ResetPassword } from "./auth/ResetPassword";
@@ -23,6 +24,11 @@ export function AppRoutes() {
       {/* The path the emailed reset link points at; see the API's
           AppServiceProvider, which builds that URL. */}
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Where an emailed invitation lands. Outside RequireAuth on purpose:
+          whoever clicked it may have no account yet, and the screen names the
+          trip before asking them for anything. */}
+      <Route path="/invitations/:token" element={<AcceptInvitation />} />
 
       <Route
         path="/"

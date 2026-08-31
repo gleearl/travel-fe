@@ -1,6 +1,7 @@
 import { categoryOf } from "../lib/categories";
 import { googleMapsUrl } from "../lib/maps";
 import type { Place } from "../lib/api/types";
+import { Avatar } from "../ui/Avatar";
 import { InstagramMark } from "../ui/InstagramMark";
 import { Stamp } from "../ui/Stamp";
 
@@ -15,14 +16,25 @@ export function PlaceCard({
   onSelect,
   onEdit,
   onToggleVisited,
+  canEdit,
+  ownerId,
 }: {
   place: Place;
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onToggleVisited: () => void;
+  /** False for a viewer, who can read the card and follow its links, no more. */
+  canEdit: boolean;
+  /** Whose trip this is, which is what makes an "added by" worth drawing. */
+  ownerId: number | null;
 }) {
   const category = categoryOf(place.category);
+
+  /* Only when somebody other than the trip's owner put it here. On a trip
+     you are keeping alone that is never true, so no card carries a face it
+     does not need; on a shared one it marks exactly what a companion added. */
+  const addedBy = place.addedBy && place.addedBy.id !== ownerId ? place.addedBy : null;
 
   return (
     <li
@@ -87,14 +99,16 @@ export function PlaceCard({
           belong: an <a> cannot be nested inside a <button>, and the whole card
           body is the button that selects the pin. */}
       <div className="flex items-center gap-1 border-t border-rule px-2 py-1">
-        <button
-          type="button"
-          onClick={onToggleVisited}
-          aria-pressed={place.visited}
-          className="stamp min-h-9 rounded-card px-2 text-ink-2 hover:bg-accent-soft hover:text-ink"
-        >
-          {place.visited ? "Not yet" : "Been"}
-        </button>
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={onToggleVisited}
+            aria-pressed={place.visited}
+            className="stamp min-h-9 rounded-card px-2 text-ink-2 hover:bg-accent-soft hover:text-ink"
+          >
+            {place.visited ? "Not yet" : "Been"}
+          </button>
+        ) : null}
 
         <a
           href={googleMapsUrl(place)}
@@ -122,13 +136,21 @@ export function PlaceCard({
           </a>
         ) : null}
 
-        <button
-          type="button"
-          onClick={onEdit}
-          className="stamp ml-auto min-h-9 rounded-card px-2 text-ink-2 hover:bg-accent-soft hover:text-ink"
-        >
-          Edit
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          {addedBy ? (
+            <Avatar name={addedBy.name} size={20} title={`Added by ${addedBy.name}`} />
+          ) : null}
+
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="stamp min-h-9 rounded-card px-2 text-ink-2 hover:bg-accent-soft hover:text-ink"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
       </div>
     </li>
   );

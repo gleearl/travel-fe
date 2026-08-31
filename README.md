@@ -30,8 +30,9 @@ npm run build
 src/
   lib/api/      every call to the server, and the only place that knows the wire format
   auth/         the token, the four sign-in screens, and the route guard
+  invitations/  where a mailed invitation link lands
   trips/        the list and the trip form
-  trip/         the map screen: map, sheet, place list, place form
+  trip/         the map screen: map, sheet, place list, place form, people sheet
   ui/           the pieces every screen is built from
   styles/       theme.css is the whole palette and type system
 ```
@@ -77,6 +78,25 @@ download, and the trips list has no map on it.
 the API to OpenStreetMap's Nominatim, whose usage policy is about a request a
 second — a per-keystroke search would spend that on a single word. Pressing and
 holding the map drops a pin anywhere instead.
+
+**Trips can be shared.** The server sends one field — `role`, being *your* role
+on that trip — and every control on the screen is drawn or not drawn from it. A
+viewer gets no "Add place", no "Edit", no "Been", and the map's long-press is
+inert; a `View only` stamp sits with the dates so the absence reads as a fact
+about your access rather than as something that failed to load. Hidden rather
+than disabled: a button that can never be enabled is furniture.
+
+People are drawn as **initials**, and deliberately in no colour of their own —
+the palette spends one saturated hue per *kind of place*, and a green avatar
+beside a green pin would read as if it meant "sight". Instead `ui/Avatar.tsx`
+borrows the idiom the app already speaks: the owner is inked in, everyone else
+sits on paper, the same filled-versus-hollow distinction that separates a place
+you have been from one you have not.
+
+`/invitations/:token` is the one screen outside the auth guard. Whoever clicked
+that link may have no account at all, so it names the trip and who sent it
+before asking them for anything. Signing up from there claims the invitation on
+the way through, so nobody has to come back and press accept.
 
 **Auth is a bearer token**, kept in `localStorage` and attached by
 `src/lib/api/http.ts`. Not a cookie: the app is served from `github.io` and the

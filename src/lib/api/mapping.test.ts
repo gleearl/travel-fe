@@ -47,6 +47,9 @@ describe("trips", () => {
       startDate: "2026-03-04",
       endDate: "2026-03-18",
       placeCount: 14,
+      role: "owner",
+      owner: null,
+      collaborators: [],
       places: [],
     });
   });
@@ -128,5 +131,78 @@ describe("geocoding", () => {
     expect(await searchPlaces("fuglen")).toEqual([
       { name: "Fuglen Asakusa", address: "2-6-15 Asakusa", lat: 35.7148, lng: 139.7967 },
     ]);
+  });
+});
+
+describe("sharing", () => {
+  it("carries the role the server gave, so the UI never has to infer it", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ data: { id: 1, name: "Japan", role: "viewer", owner: { id: 4, name: "Ana Lopez" } } }),
+    );
+
+    const trip = await fetchTrip(1);
+
+    expect(trip.role).toBe("viewer");
+    expect(trip.owner).toEqual({ id: 4, name: "Ana Lopez" });
+  });
+
+  it("reads the people on a trip", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        data: {
+          id: 1,
+          name: "Japan",
+          role: "owner",
+          collaborators: [
+            { id: 4, name: "Ana Lopez", role: "editor" },
+            { id: 5, name: "Bo Chen", role: "viewer" },
+          ],
+        },
+      }),
+    );
+
+    const trip = await fetchTrip(1);
+
+    expect(trip.collaborators).toHaveLength(2);
+    expect(trip.collaborators[1]).toEqual({ id: 5, name: "Bo Chen", role: "viewer" });
+  });
+
+  it("treats a trip from before sharing existed as one you own alone", async () => {
+    /* An older build, or a response that predates the feature: no role, nobody
+       on it. Guessing "viewer" would lock the owner out of their own trip. */
+    fetchMock.mockResolvedValueOnce(json({ data: { id: 1, name: "Japan" } }));
+
+    const trip = await fetchTrip(1);
+
+    expect(trip.role).toBe("owner");
+    expect(trip.collaborators).toEqual([]);
+    expect(trip.owner).toBeNull();
+  });
+
+  it("reads who added a place, and copes with nobody having", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        data: {
+          id: 1,
+          places: [
+            { id: 9, lat: "1", lng: "1", added_by: { id: 4, name: "Ana Lopez" } },
+            { id: 10, lat: "2", lng: "2", added_by: null },
+          ],
+        },
+      }),
+    );
+
+    const [first, second] = (await fetchTrip(1)).places;
+
+    expect(first.addedBy).toEqual({ id: 4, name: "Ana Lopez" });
+    expect(second.addedBy).toBeNull();
+  });
+
+  it("falls back to viewer for a role it has never heard of", async () => {
+    /* The safe direction: a role this build does not know must not be read as
+       permission to change things. */
+    fetchMock.mockResolvedValueOnce(json({ data: { id: 1, name: "Japan", role: "administrator" } }));
+
+    expect((await fetchTrip(1)).role).toBe("viewer");
   });
 });
