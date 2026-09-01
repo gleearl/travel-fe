@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchMyInvitations } from "../lib/api/invitations";
 import { fetchTrips } from "../lib/api/trips";
+import { invitationsKey, tripsKey } from "../lib/api/updates";
+import { useChanged, useLiveUpdates } from "../live/useLiveUpdates";
 import type { Invitation, Trip } from "../lib/api/types";
 import { parseDate } from "../lib/format";
 import { AppHeader } from "../ui/AppHeader";
@@ -16,29 +18,35 @@ export function TripsList() {
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchTrips()
-      .then((found) => !cancelled && setTrips(found))
-      .catch(() => !cancelled && setFailed(true));
-
-    /* Separately, and allowed to fail quietly: having nothing waiting is the
-       normal case, and an invitations outage should not stop you seeing the
-       trips you already have. */
-    fetchMyInvitations()
-      .then((found) => !cancelled && setInvitations(found))
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   /* Asked again rather than patched by hand: an accepted trip arrives with its
      place count, its people and our role on it already worked out, and none of
      that is on the invitation. */
   const forget = (id: number) => setInvitations((current) => current.filter((i) => i.id !== id));
-  const reloadTrips = () => fetchTrips().then(setTrips).catch(() => setFailed(true));
+  const reloadTrips = useCallback(
+    () => fetchTrips().then(setTrips).catch(() => setFailed(true)),
+    [],
+  );
+
+  /* Separately, and allowed to fail quietly: having nothing waiting is the
+     normal case, and an invitations outage should not stop you seeing the trips
+     you already have. */
+  const reloadInvitations = useCallback(
+    () => fetchMyInvitations().then(setInvitations).catch(() => undefined),
+    [],
+  );
+
+  useEffect(() => {
+    void reloadTrips();
+    void reloadInvitations();
+  }, [reloadTrips, reloadInvitations]);
+
+  /* And then keep it current. Somebody inviting you, or renaming a trip you are
+     on, or taking you off one, lands here without the page being reloaded — see
+     src/live/useLiveUpdates.tsx. `tripsKey` folds the ids in with the stamps, so
+     a trip arriving or leaving counts as a change too. */
+  const { updates } = useLiveUpdates();
+  useChanged(tripsKey(updates), reloadTrips);
+  useChanged(invitationsKey(updates), reloadInvitations);
 
   /* Split by the last day of the trip, not the first: you are still on a trip
      on its final morning, and it should not move to "been there" until it is

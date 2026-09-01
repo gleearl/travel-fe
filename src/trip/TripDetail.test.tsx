@@ -123,6 +123,19 @@ vi.mock("../lib/api/invitations", () => ({
   revokeInvitation: vi.fn(),
 }));
 
+/* The digest the screen watches, under the test's control. `useChanged` is
+   kept real — how a moved stamp turns into a refetch is the thing being
+   tested. Held in a box via vi.hoisted because vi.mock is lifted above the
+   imports and the factory must not read a variable that is not there yet. */
+const live = vi.hoisted(() => ({
+  current: null as { trips: Record<number, number>; invitations: { count: number; latest: number | null } } | null,
+}));
+
+vi.mock("../live/useLiveUpdates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../live/useLiveUpdates")>()),
+  useLiveUpdates: () => ({ updates: live.current, refresh: vi.fn() }),
+}));
+
 vi.mock("../lib/api/places", () => ({
   updatePlace: (id: number, input: unknown) => updatePlace(id, input),
   createPlace: vi.fn(),
@@ -152,6 +165,7 @@ beforeEach(() => {
     members: [],
     invitations: [],
   });
+  live.current = { trips: { 7: 100 }, invitations: { count: 0, latest: null } };
 });
 
 /** Opens the trip as somebody with the given role on it. */
@@ -570,5 +584,113 @@ describe("the trip screen", () => {
 
     expect(await screen.findByRole("dialog", { name: "People on this trip" })).toBeInTheDocument();
     expect(fetchMembers).toHaveBeenCalledWith(7);
+  });
+});
+
+
+describe("keeping up with everyone else", () => {
+  /* The same tree as `open`, plus somewhere to land when the trip goes away.
+     A function, not a constant: handed back the very same element object React
+     bails out of re-rendering, and the rerenders below would do nothing. */
+  const tree = () => (
+    <MemoryRouter initialEntries={["/trips/7"]}>
+      <AuthProvider>
+        <Routes>
+          <Route path="/trips/:id" element={<TripDetail />} />
+          <Route path="/" element={<p>Your trips</p>} />
+        </Routes>
+      </AuthProvider>
+    </MemoryRouter>
+  );
+
+  it("brings in a place somebody else added, without the page being reloaded", async () => {
+    const { rerender } = render(tree());
+    await screen.findByRole("heading", { name: "Japan 2026" });
+    expect(screen.queryAllByText("Nakameguro")).toHaveLength(0);
+
+    // Somebody else adds a place: their write moved this trip's stamp.
+    fetchTrip.mockResolvedValue({
+      ...structuredClone(TRIP),
+      places: [...structuredClone(TRIP).places, place({ id: 4, name: "Nakameguro" })],
+    });
+    live.current = { trips: { 7: 200 }, invitations: { count: 0, latest: null } };
+    rerender(tree());
+
+    /* Twice over, and that is the point: the card in the list and the pin on
+       the map both come off the same refetched trip. */
+    expect(await screen.findAllByText("Nakameguro")).toHaveLength(2);
+  });
+
+  it("asks for nothing while the stamp holds still", async () => {
+    const { rerender } = render(tree());
+    await screen.findByRole("heading", { name: "Japan 2026" });
+    expect(fetchTrip).toHaveBeenCalledTimes(1);
+
+    live.current = { trips: { 7: 100 }, invitations: { count: 1, latest: 5 } };
+    rerender(tree());
+
+    // A change elsewhere is not a change here.
+    expect(fetchTrip).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends you back to the list when you are taken off the trip", async () => {
+    const { rerender } = render(tree());
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    /* Nothing records a removal — the trip simply stops being listed, and its
+       absence is the whole signal. Better than leaving somebody on a screen
+       whose next tap answers 404. */
+    live.current = { trips: {}, invitations: { count: 0, latest: null } };
+    rerender(tree());
+
+    expect(await screen.findByText("Your trips")).toBeInTheDocument();
+  });
+
+  it("does not bounce you off a perfectly good trip before the first digest", async () => {
+    live.current = null;
+    render(tree());
+
+    expect(await screen.findByRole("heading", { name: "Japan 2026" })).toBeInTheDocument();
+    expect(screen.queryByText("Your trips")).not.toBeInTheDocument();
+  });
+
+  it("moves somebody from invited to on the trip while the sheet is open", async () => {
+    const user = userEvent.setup();
+    fetchMembers.mockResolvedValue({
+      owner: { id: 99, name: "Glee Earl", role: "owner" },
+      members: [],
+      invitations: [
+        {
+          id: 1,
+          role: "editor",
+          user: { id: 4, name: "Ana Lopez" },
+          invitedBy: { id: 99, name: "Glee Earl" },
+          trip: { id: 7, name: "Japan 2026", destination: "", startDate: null, endDate: null },
+        },
+      ],
+    });
+
+    fetchTrip.mockResolvedValue({
+      ...structuredClone(TRIP),
+      collaborators: [{ id: 4, name: "Ana Lopez", role: "editor" }],
+    });
+
+    const { rerender } = render(tree());
+    await user.click(await screen.findByRole("button", { name: /2 people on this trip/i }));
+    await screen.findByRole("dialog", { name: "People on this trip" });
+    expect(fetchMembers).toHaveBeenCalledTimes(1);
+
+    // Ana accepts, somewhere else entirely. Her membership touched the trip.
+    fetchMembers.mockResolvedValue({
+      owner: { id: 99, name: "Glee Earl", role: "owner" },
+      members: [{ id: 4, name: "Ana Lopez", role: "editor", email: null }],
+      invitations: [],
+    });
+    live.current = { trips: { 7: 200 }, invitations: { count: 0, latest: null } };
+    rerender(tree());
+
+    /* Before this, the only way to find out was to close the sheet and open it
+       again — the remount was the refresh. */
+    await vi.waitFor(() => expect(fetchMembers).toHaveBeenCalledTimes(2));
   });
 });
