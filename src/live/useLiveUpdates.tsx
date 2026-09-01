@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { fetchUpdates, type Updates } from "../lib/api/updates";
+import { fetchUpdates, invitationsKey, tripsKey, type Updates } from "../lib/api/updates";
 import { useAuth } from "../auth/useAuth";
 
 /* How often to ask, while the tab is being looked at. One constant, because it
@@ -31,9 +31,17 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
      restart the loop, and so the loop itself is not rebuilt on every answer. */
   const askNow = useRef<() => void>(() => {});
 
+  /* What the last answer said, folded into one string. A poll answers with a
+     fresh object every time, and handing that to `setUpdates` would re-render
+     every screen below every five seconds whether or not anything had moved —
+     which is enough to disturb anything holding state of its own between
+     renders. Most ticks say exactly what the one before it did. */
+  const seen = useRef<string | null>(null);
+
   useEffect(() => {
     // Signed out there is nothing to watch, and no token to watch it with.
     if (!user) {
+      seen.current = null;
       setUpdates(null);
       return;
     }
@@ -48,7 +56,12 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === "visible") {
         try {
           const next = await fetchUpdates();
-          if (!stopped) setUpdates(next);
+          const digest = `${tripsKey(next)}|${invitationsKey(next)}`;
+
+          if (!stopped && digest !== seen.current) {
+            seen.current = digest;
+            setUpdates(next);
+          }
         } catch {
           /* Keep the last answer and try again on the next tick. A blip in the
              connection must not read as everything having been deleted. A 401
@@ -84,7 +97,10 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => askNow.current(), []);
 
-  return <LiveContext value={{ updates, refresh }}>{children}</LiveContext>;
+  /* Held steady so that a re-render up here is not a re-render everywhere. */
+  const value = useMemo(() => ({ updates, refresh }), [updates, refresh]);
+
+  return <LiveContext value={value}>{children}</LiveContext>;
 }
 
 export function useLiveUpdates(): LiveValue {

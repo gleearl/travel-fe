@@ -24,10 +24,18 @@ export function Sheet({
   footer?: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+
+  /* Read through a ref rather than depended on. Every caller passes an inline
+     arrow, so a new one arrives on each render of the screen behind — and this
+     effect listed as depending on it would be torn down and set up again each
+     time, taking the focus below with it. */
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") close.current();
     };
     document.addEventListener("keydown", onKey);
 
@@ -36,14 +44,27 @@ export function Sheet({
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    // Focus lands inside the sheet, not left behind on the button that opened it.
-    panel.current?.querySelector<HTMLElement>("input, textarea, select, button")?.focus();
-
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [onClose]);
+  }, []);
+
+  /* Focus lands inside the sheet on open, not left behind on the button that
+     opened it — and only on open. The screen behind re-renders on its own (the
+     five-second poll for one), and a sheet that re-focused each time would pull
+     the caret out of a half-typed field a few seconds after every visit to it.
+
+     The first field, not the first focusable thing: Close is the first button
+     in the panel, and landing there means typing goes nowhere. Fields only —
+     a sheet with none of them starts on Close, which is at least somewhere. */
+  useEffect(() => {
+    const field = panel.current?.querySelector<HTMLElement>(
+      'input:not([type="hidden"]), textarea, select',
+    );
+
+    (field ?? closeButton.current)?.focus();
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -67,6 +88,7 @@ export function Sheet({
         <header className="flex items-center justify-between border-b border-rule px-5 py-4">
           <h2 className="font-display text-lg text-ink">{title}</h2>
           <button
+            ref={closeButton}
             type="button"
             onClick={onClose}
             aria-label="Close"
