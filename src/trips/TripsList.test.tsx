@@ -77,6 +77,17 @@ vi.mock("../lib/api/invitations", () => ({
   declineInvitation: (id: number) => declineInvitation(id),
 }));
 
+/* The digest the list watches, under the test's control; `useChanged` stays
+   real. See the same shape in TripDetail.test.tsx. */
+const live = vi.hoisted(() => ({
+  current: null as { trips: Record<number, number>; invitations: { count: number; latest: number | null } } | null,
+}));
+
+vi.mock("../live/useLiveUpdates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../live/useLiveUpdates")>()),
+  useLiveUpdates: () => ({ updates: live.current, refresh: vi.fn() }),
+}));
+
 vi.mock("../auth/useAuth", () => ({
   useAuth: () => ({ user: { id: 1, name: "Ana Lopez", email: "ana@example.test" }, signOut: vi.fn() }),
 }));
@@ -93,6 +104,7 @@ beforeEach(() => {
   fetchMyInvitations.mockReset().mockResolvedValue([]);
   acceptInvitation.mockReset().mockResolvedValue(3);
   declineInvitation.mockReset().mockResolvedValue(undefined);
+  live.current = { trips: { 1: 100 }, invitations: { count: 0, latest: null } };
 });
 
 const open = () =>
@@ -168,5 +180,83 @@ describe("an invitation waiting on you", () => {
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.getByText(/invited you/)).toBeInTheDocument();
+  });
+});
+
+
+describe("keeping the list current", () => {
+  /* A function, not a constant: React bails out of re-rendering when handed
+     back the identical element object. */
+  const tree = () => (
+    <MemoryRouter>
+      <TripsList />
+    </MemoryRouter>
+  );
+
+  it("shows an invitation that arrives while you are looking at the list", async () => {
+    const { rerender } = render(tree());
+    await screen.findByRole("heading", { name: "Your trips" });
+    expect(screen.queryByText("Japan 2026")).not.toBeInTheDocument();
+
+    // Somebody invites you. Nothing is emailed; this is how you find out.
+    fetchMyInvitations.mockResolvedValue([INVITATION]);
+    live.current = { trips: { 1: 100 }, invitations: { count: 1, latest: 200 } };
+    rerender(tree());
+
+    expect(await screen.findByText("Japan 2026")).toBeInTheDocument();
+    expect(await screen.findByText(/Glee Earl invited you/)).toBeInTheDocument();
+  });
+
+  it("notices an invitation being taken back, which leaves the stamp alone", async () => {
+    fetchMyInvitations.mockResolvedValue([INVITATION]);
+    const { rerender } = render(tree());
+    await screen.findByText("Japan 2026");
+    expect(fetchMyInvitations).toHaveBeenCalledTimes(1);
+
+    /* The case the count is there for: revoking the older of two invitations
+       leaves `latest` exactly where it was, and a stamp alone would say
+       nothing had happened. */
+    fetchMyInvitations.mockResolvedValue([]);
+    live.current = { trips: { 1: 100 }, invitations: { count: 0, latest: 200 } };
+    rerender(tree());
+
+    await vi.waitFor(() => expect(fetchMyInvitations).toHaveBeenCalledTimes(2));
+  });
+
+  it("picks up a trip someone else renamed", async () => {
+    fetchTrips.mockResolvedValue([trip({ id: 1, name: "Japan 2026" })]);
+    const { rerender } = render(tree());
+    await screen.findByText("Japan 2026");
+
+    fetchTrips.mockResolvedValue([trip({ id: 1, name: "Japan, later" })]);
+    live.current = { trips: { 1: 200 }, invitations: { count: 0, latest: null } };
+    rerender(tree());
+
+    expect(await screen.findByText("Japan, later")).toBeInTheDocument();
+  });
+
+  it("picks up a trip you have just been added to", async () => {
+    const { rerender } = render(tree());
+    await screen.findByRole("heading", { name: "Your trips" });
+
+    /* A trip arriving is a key appearing, not a stamp moving — which is why the
+       ids are folded into what the list watches. */
+    fetchTrips.mockResolvedValue([trip({ id: 2, name: "Lisbon" })]);
+    live.current = { trips: { 1: 100, 2: 300 }, invitations: { count: 0, latest: null } };
+    rerender(tree());
+
+    expect(await screen.findByText("Lisbon")).toBeInTheDocument();
+  });
+
+  it("asks for nothing while nothing has moved", async () => {
+    const { rerender } = render(tree());
+    await screen.findByRole("heading", { name: "Your trips" });
+    expect(fetchTrips).toHaveBeenCalledTimes(1);
+
+    live.current = { trips: { 1: 100 }, invitations: { count: 0, latest: null } };
+    rerender(tree());
+
+    expect(fetchTrips).toHaveBeenCalledTimes(1);
+    expect(fetchMyInvitations).toHaveBeenCalledTimes(1);
   });
 });

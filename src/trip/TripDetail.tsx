@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { CATEGORY_IDS, type Category } from "../lib/categories";
 import { updatePlace } from "../lib/api/places";
 import { fetchTrip } from "../lib/api/trips";
 import type { Place, Trip } from "../lib/api/types";
+import { useChanged, useLiveUpdates } from "../live/useLiveUpdates";
 import { DESKTOP, useMediaQuery } from "../lib/useMediaQuery";
 import { AppHeader } from "../ui/AppHeader";
 import { TripForm } from "../trips/TripForm";
@@ -40,6 +41,39 @@ export function TripDetail() {
       cancelled = true;
     };
   }, [tripId]);
+
+  /* ── Keeping up with everyone else ───────────────────────────────────────
+     A place another editor adds, a rename, a role that just changed: the stamp
+     for this trip moves and we read it again. Replacing the trip wholesale is
+     safe because both forms take their fields with `useState(initial)` and
+     never sync from props, so an update arriving underneath one cannot
+     overwrite what is half-typed in it. */
+  const { updates } = useLiveUpdates();
+
+  /* Except while one of our own writes is in the air. toggleVisited paints the
+     new state under the thumb before the server has agreed; a refetch landing
+     in that gap would flick the pin back and then forward again. */
+  const writing = useRef(0);
+  const missed = useRef(false);
+
+  const reloadTrip = useCallback(() => {
+    if (writing.current > 0) {
+      missed.current = true;
+      return;
+    }
+    missed.current = false;
+    fetchTrip(tripId)
+      .then(setTrip)
+      .catch(() => undefined);
+  }, [tripId]);
+
+  useChanged(updates?.trips[tripId] ?? null, reloadTrip);
+
+  /* Gone from the digest means removed from the trip, or the trip deleted.
+     Only once something has arrived: before that, every trip is "missing". */
+  useEffect(() => {
+    if (updates && !(tripId in updates.trips)) navigate("/", { replace: true });
+  }, [updates, tripId, navigate]);
 
   const places = useMemo(() => trip?.places ?? [], [trip]);
 
@@ -91,10 +125,15 @@ export function TripDetail() {
     // Optimistic: the pin and the card change under the thumb that pressed them.
     const next = { ...place, visited: !place.visited };
     replacePlace(next);
+    writing.current += 1;
     try {
       replacePlace(await updatePlace(place.id, next));
     } catch {
       replacePlace(place);
+    } finally {
+      writing.current -= 1;
+      // Take the update we waved away while this was in the air.
+      if (writing.current === 0 && missed.current) reloadTrip();
     }
   }
 

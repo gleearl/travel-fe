@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../lib/api/http";
 import { invite, revokeInvitation } from "../lib/api/invitations";
 import { fetchMembers, leaveTrip, removeMember, setMemberRole, type TripPeople } from "../lib/api/members";
 import type { Collaborator, TripRole } from "../lib/api/types";
+import { useChanged, useLiveUpdates } from "../live/useLiveUpdates";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
@@ -40,7 +41,18 @@ export function PeopleSheet({
     };
   }, [tripId]);
 
-  const reload = () => fetchMembers(tripId).then(setPeople).catch(() => setFailed(true));
+  const reload = useCallback(
+    () => fetchMembers(tripId).then(setPeople).catch(() => setFailed(true)),
+    [tripId],
+  );
+
+  /* The reason this screen wanted live updates most: an invitation is answered
+     somewhere else entirely, and until now the only way to find out was to
+     close this sheet and open it again. Accepting writes a member row, which
+     touches the trip, which moves the stamp we are watching — and they cross
+     from Invited to the list above it while the owner is looking at it. */
+  const { updates } = useLiveUpdates();
+  useChanged(updates?.trips[tripId] ?? null, reload);
 
   return (
     <Sheet title="People on this trip" onClose={onClose}>
