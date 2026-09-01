@@ -46,12 +46,21 @@ describe("trips", () => {
       destinationLng: 139.7671,
       startDate: "2026-03-04",
       endDate: "2026-03-18",
+      archivedAt: null,
       placeCount: 14,
       role: "owner",
       owner: null,
       collaborators: [],
       places: [],
     });
+  });
+
+  it("carries the archive stamp through when the trip has been filed away", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ data: { id: 1, name: "Lisbon 2019", archived_at: "2026-09-01T10:00:00+00:00" } }),
+    );
+
+    expect((await fetchTrip(1)).archivedAt).toBe("2026-09-01T10:00:00+00:00");
   });
 
   it("reads a trip with no destination or dates without inventing any", async () => {

@@ -13,6 +13,7 @@ const trip = (over: Partial<Trip>): Trip => ({
   destinationLng: null,
   startDate: null,
   endDate: null,
+  archivedAt: null,
   placeCount: 0,
   role: "owner",
   owner: null,
@@ -68,7 +69,7 @@ const acceptInvitation = vi.fn();
 const declineInvitation = vi.fn();
 
 vi.mock("../lib/api/trips", () => ({
-  fetchTrips: () => fetchTrips(),
+  fetchTrips: (options?: { archived?: boolean }) => fetchTrips(options),
 }));
 
 vi.mock("../lib/api/invitations", () => ({
@@ -101,11 +102,18 @@ const INVITATION = {
 
 beforeEach(() => {
   fetchTrips.mockReset().mockResolvedValue([]);
+  archived = [];
   fetchMyInvitations.mockReset().mockResolvedValue([]);
   acceptInvitation.mockReset().mockResolvedValue(3);
   declineInvitation.mockReset().mockResolvedValue(undefined);
   live.current = { trips: { 1: 100 }, invitations: { count: 0, latest: null } };
 });
+
+/** How many times the *main* list has been asked for. The archive rides
+    along on every reload, and counting both would turn these assertions about
+    when the list refreshes into assertions about how many calls that takes. */
+const listFetches = () =>
+  fetchTrips.mock.calls.filter(([options]) => !options?.archived).length;
 
 const open = () =>
   render(
@@ -154,7 +162,7 @@ describe("an invitation waiting on you", () => {
     expect(acceptInvitation).toHaveBeenCalledWith(7);
     /* The list is asked again rather than patched by hand: the trip arrives
        with its places count, its people and our role already on it. */
-    expect(fetchTrips).toHaveBeenCalledTimes(2);
+    expect(listFetches()).toBe(2);
     expect(screen.queryByText(/invited you/)).not.toBeInTheDocument();
   });
 
@@ -166,7 +174,7 @@ describe("an invitation waiting on you", () => {
     await user.click(await screen.findByRole("button", { name: /decline/i }));
 
     expect(declineInvitation).toHaveBeenCalledWith(7);
-    expect(fetchTrips).toHaveBeenCalledTimes(1);
+    expect(listFetches()).toBe(1);
     expect(screen.queryByText(/invited you/)).not.toBeInTheDocument();
   });
 
@@ -251,12 +259,83 @@ describe("keeping the list current", () => {
   it("asks for nothing while nothing has moved", async () => {
     const { rerender } = render(tree());
     await screen.findByRole("heading", { name: "Your trips" });
-    expect(fetchTrips).toHaveBeenCalledTimes(1);
+    expect(listFetches()).toBe(1);
 
     live.current = { trips: { 1: 100 }, invitations: { count: 0, latest: null } };
     rerender(tree());
 
-    expect(fetchTrips).toHaveBeenCalledTimes(1);
+    expect(listFetches()).toBe(1);
     expect(fetchMyInvitations).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+/* ── The archive ────────────────────────────────────────────────────── */
+
+let archived: Trip[] = [];
+
+/** Answers the active list from `live`, and the archived one from `archived`. */
+const withArchive = (active: Trip[]) =>
+  fetchTrips.mockImplementation((options?: { archived?: boolean }) =>
+    Promise.resolve(options?.archived ? archived : active),
+  );
+
+describe("archived trips", () => {
+  it("says nothing at all when nothing has been archived", async () => {
+    withArchive([trip({ id: 1, name: "Japan 2026" })]);
+    open();
+
+    await screen.findByText("Japan 2026");
+
+    expect(screen.queryByRole("button", { name: /archived/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps them out of the main list, behind a count", async () => {
+    archived = [trip({ id: 2, name: "Lisbon 2019", archivedAt: "2026-09-01T10:00:00+00:00" })];
+    withArchive([trip({ id: 1, name: "Japan 2026" })]);
+    open();
+
+    await screen.findByText("Japan 2026");
+
+    /* Filed away means out of sight until asked for — a section that showed
+       them by default would be the same list with a new heading. */
+    expect(screen.queryByText("Lisbon 2019")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /archived \(1\)/i })).toBeInTheDocument();
+  });
+
+  it("shows them when the section is opened", async () => {
+    const user = userEvent.setup();
+    archived = [trip({ id: 2, name: "Lisbon 2019", archivedAt: "2026-09-01T10:00:00+00:00" })];
+    withArchive([]);
+    open();
+
+    await user.click(await screen.findByRole("button", { name: /archived \(1\)/i }));
+
+    expect(screen.getByText("Lisbon 2019")).toBeInTheDocument();
+  });
+
+  it("does not sort an archived trip into upcoming or past", async () => {
+    /* Filed away is not a date question: a finished trip that was archived
+       belongs in the archive, not in "been there" as well. */
+    const user = userEvent.setup();
+    archived = [trip({ id: 2, name: "Lisbon 2019", startDate: "2019-05-01", endDate: "2019-05-08" })];
+    withArchive([]);
+    open();
+
+    await user.click(await screen.findByRole("button", { name: /archived \(1\)/i }));
+
+    expect(screen.queryByRole("heading", { name: "Been there" })).not.toBeInTheDocument();
+  });
+
+  it("does not count an empty active list as having no trips at all", async () => {
+    /* The empty state offers to start your first trip. Somebody with ten
+       archived trips has not got none. */
+    archived = [trip({ id: 2, name: "Lisbon 2019" })];
+    withArchive([]);
+    open();
+
+    await screen.findByRole("button", { name: /archived \(1\)/i });
+
+    expect(screen.queryByText(/Nothing planned yet/)).not.toBeInTheDocument();
   });
 });

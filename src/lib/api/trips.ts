@@ -15,6 +15,7 @@ export function toTrip(raw: Record<string, unknown>): Trip {
     destinationLng: numberOrNull(raw.destination_lng),
     startDate: (raw.start_date as string) ?? null,
     endDate: (raw.end_date as string) ?? null,
+    archivedAt: (raw.archived_at as string) ?? null,
     placeCount: Number(raw.place_count ?? 0),
     /* Two different absences, two different answers. No role *field* at all is
        a response from before sharing existed, which can only be a trip of your
@@ -50,8 +51,12 @@ function toBody(input: TripInput) {
   };
 }
 
-export async function fetchTrips(): Promise<Trip[]> {
-  const payload = await request<{ data: Record<string, unknown>[] }>("/api/trips");
+/* One list or the other, never both. The archive is somewhere you go rather
+   than a section that grows on the end of the main list, so asking for it is a
+   separate call and the everyday answer stays as small as it was. */
+export async function fetchTrips(options?: { archived?: boolean }): Promise<Trip[]> {
+  const path = options?.archived ? "/api/trips?archived=1" : "/api/trips";
+  const payload = await request<{ data: Record<string, unknown>[] }>(path);
   return unwrap(payload).map(toTrip);
 }
 
@@ -74,6 +79,16 @@ export async function updateTrip(id: number, input: TripInput): Promise<Trip> {
     body: toBody(input),
   });
   return toTrip(unwrap(payload));
+}
+
+/* Both answer 204 and neither hands anything back: the caller already knows
+   which trip it asked about, and the list is refetched either way. */
+export async function archiveTrip(id: number): Promise<void> {
+  await request<void>(`/api/trips/${id}/archive`, { method: "POST" });
+}
+
+export async function unarchiveTrip(id: number): Promise<void> {
+  await request<void>(`/api/trips/${id}/archive`, { method: "DELETE" });
 }
 
 export async function deleteTrip(id: number): Promise<void> {
