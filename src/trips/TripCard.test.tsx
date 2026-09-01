@@ -12,6 +12,7 @@ const trip = (over: Partial<Trip> = {}): Trip => ({
   destinationLng: null,
   startDate: "2026-03-04",
   endDate: "2026-03-18",
+  archivedAt: null,
   placeCount: 14,
   role: "owner",
   owner: { id: 9, name: "Glee Earl" },
