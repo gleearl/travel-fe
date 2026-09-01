@@ -31,6 +31,7 @@ const TRIP: Trip = {
   destinationLng: 139.76,
   startDate: "2026-03-04",
   endDate: "2026-03-18",
+  archivedAt: null,
   placeCount: 3,
   role: "owner",
   owner: { id: 99, name: "Glee Earl" },
