@@ -14,9 +14,11 @@ import { TripForm } from "./TripForm";
 
 export function TripsList() {
   const [trips, setTrips] = useState<Trip[] | null>(null);
+  const [archived, setArchived] = useState<Trip[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [showingArchive, setShowingArchive] = useState(false);
 
   /* Asked again rather than patched by hand: an accepted trip arrives with its
      place count, its people and our role on it already worked out, and none of
@@ -24,6 +26,15 @@ export function TripsList() {
   const forget = (id: number) => setInvitations((current) => current.filter((i) => i.id !== id));
   const reloadTrips = useCallback(
     () => fetchTrips().then(setTrips).catch(() => setFailed(true)),
+    [],
+  );
+
+  /* Asked for separately and allowed to fail quietly, like the invitations
+     below: the archive is a footnote, and not being able to reach it should
+     not take the trips you actually have with it. Fetched up front rather
+     than on opening, because the count is on the button that opens it. */
+  const reloadArchived = useCallback(
+    () => fetchTrips({ archived: true }).then(setArchived).catch(() => undefined),
     [],
   );
 
@@ -37,15 +48,21 @@ export function TripsList() {
 
   useEffect(() => {
     void reloadTrips();
+    void reloadArchived();
     void reloadInvitations();
-  }, [reloadTrips, reloadInvitations]);
+  }, [reloadTrips, reloadArchived, reloadInvitations]);
 
   /* And then keep it current. Somebody inviting you, or renaming a trip you are
      on, or taking you off one, lands here without the page being reloaded — see
      src/live/useLiveUpdates.tsx. `tripsKey` folds the ids in with the stamps, so
      a trip arriving or leaving counts as a change too. */
   const { updates } = useLiveUpdates();
-  useChanged(tripsKey(updates), reloadTrips);
+  /* Archiving bumps the trip's stamp, so one signal moves both lists — which
+     is how a trip filed away in another tab leaves this one. */
+  useChanged(tripsKey(updates), () => {
+    void reloadTrips();
+    void reloadArchived();
+  });
   useChanged(invitationsKey(updates), reloadInvitations);
 
   /* Split by the last day of the trip, not the first: you are still on a trip
@@ -77,7 +94,7 @@ export function TripsList() {
           </p>
         ) : null}
 
-        {trips?.length === 0 && invitations.length === 0 ? (
+        {trips?.length === 0 && invitations.length === 0 && archived.length === 0 ? (
           <EmptyState
             title="Nothing planned yet"
             body="A trip is a name and a place. The list of things to see comes after."
@@ -116,6 +133,31 @@ export function TripsList() {
         ) : null}
         {past.length > 0 ? (
           <Section title="Been there" trips={past} offset={upcoming.length} />
+        ) : null}
+
+        {/* Out of sight until asked for. A section that showed them by default
+            would be the same list with a new heading on it. */}
+        {archived.length > 0 ? (
+          <section className="mt-9">
+            <h2 className="mb-3 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowingArchive((open) => !open)}
+                aria-expanded={showingArchive}
+                className="stamp text-ink-3 transition-colors hover:text-ink-2"
+              >
+                Archived ({archived.length})
+              </button>
+              <span aria-hidden="true" className="h-px flex-1 bg-rule" />
+            </h2>
+            {showingArchive ? (
+              <ul className="flex flex-col gap-3">
+                {archived.map((trip, index) => (
+                  <TripCard key={trip.id} trip={trip} index={index} />
+                ))}
+              </ul>
+            ) : null}
+          </section>
         ) : null}
       </main>
 

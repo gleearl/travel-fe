@@ -53,6 +53,8 @@ export interface Trip {
   destinationLng: number | null;
   startDate: string | null;
   endDate: string | null;
+  /** When the owner filed it away, and null while it is still in play. */
+  archivedAt: string | null;
   placeCount: number;
   /** What *you* may do here. Every control on the trip screen reads this. */
   role: TripRole;

@@ -260,6 +260,11 @@ export function TripDetail() {
             setTrip((current) => (current ? { ...saved, places: current.places } : saved));
             setEditingTrip(false);
           }}
+          /* Both land back on the list — one because the trip has moved to a
+             part of it this screen is not, the other because there is no trip
+             left to be on. `replace` so Back does not return to a dead id. */
+          onArchived={() => navigate("/", { replace: true })}
+          onDeleted={() => navigate("/", { replace: true })}
         />
       ) : null}
     </div>

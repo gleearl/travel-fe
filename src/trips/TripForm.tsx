@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { searchPlaces } from "../lib/api/geocode";
+import { countLabel } from "../lib/format";
 import { ApiError } from "../lib/api/http";
-import { createTrip, updateTrip } from "../lib/api/trips";
+import { archiveTrip, createTrip, deleteTrip, unarchiveTrip, updateTrip } from "../lib/api/trips";
 import type { Trip, TripInput } from "../lib/api/types";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
@@ -20,11 +21,16 @@ export function TripForm({
   trip,
   onClose,
   onSaved,
+  onArchived,
+  onDeleted,
 }: {
   /** Absent when this is a new trip. */
   trip?: Trip;
   onClose: () => void;
   onSaved: (trip: Trip) => void;
+  /** Filed away or taken back out; the caller decides where to go next. */
+  onArchived?: () => void;
+  onDeleted?: () => void;
 }) {
   const [form, setForm] = useState<TripInput>(
     trip
@@ -40,6 +46,21 @@ export function TripForm({
   );
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
+  /* The delete button, mid-question. There is no undo on the other side of
+     it, and one stray tap on a phone should not be the whole ceremony. */
+  const [confirming, setConfirming] = useState(false);
+
+  /* Archiving and deleting are the owner's alone, and neither is a thing you
+     can do to a trip that does not exist yet. */
+  const dangerous = trip && trip.role === "owner";
+  const archived = trip?.archivedAt != null;
+
+  /* What the delete is about to take with it. The places themselves when the
+     trip is carrying them — which is the case on the trip screen, where this
+     sheet is opened from — and the count the list rides in on otherwise.
+     `place_count` is `whenCounted`, so the detail call does not answer it and
+     reading it alone would offer to delete "0 places" with three on screen. */
+  const places = trip ? trip.places.length || trip.placeCount : 0;
 
   const set = (key: keyof TripInput) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -68,6 +89,21 @@ export function TripForm({
     } catch (caught) {
       setError(caught instanceof ApiError ? caught : new ApiError(0, "Couldn't reach the server."));
       setBusy(false);
+    }
+  }
+
+  /** Both archive directions, and the delete. Failures land in the same
+      place every other error in this sheet does. */
+  async function run(action: () => Promise<void>, done: () => void, whenItFails: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      done();
+    } catch {
+      setError(new ApiError(0, whenItFails));
+      setBusy(false);
+      setConfirming(false);
     }
   }
 
@@ -131,6 +167,39 @@ export function TripForm({
           </p>
         ) : null}
       </form>
+
+      {dangerous ? (
+        <div className="mt-7 flex items-center gap-2 border-t border-rule pt-4">
+          <Button
+            disabled={busy}
+            onClick={() =>
+              run(
+                () => (archived ? unarchiveTrip(trip.id) : archiveTrip(trip.id)),
+                () => onArchived?.(),
+                archived ? "Couldn't restore that. Try again." : "Couldn't archive that. Try again.",
+              )
+            }
+          >
+            {archived ? "Restore" : "Archive"}
+          </Button>
+
+          {/* The count is the point of the second tap: "and its 14 places" is
+              what makes a trip worth keeping obviously different from one
+              worth losing. */}
+          <Button
+            variant="danger"
+            disabled={busy}
+            className="ml-auto"
+            onClick={() =>
+              confirming
+                ? run(() => deleteTrip(trip.id), () => onDeleted?.(), "Couldn't delete that. Try again.")
+                : setConfirming(true)
+            }
+          >
+            {confirming ? `Really delete? · ${countLabel(places, "place")}` : "Delete"}
+          </Button>
+        </div>
+      ) : null}
     </Sheet>
   );
 }
