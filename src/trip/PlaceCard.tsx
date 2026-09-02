@@ -38,6 +38,8 @@ export function PlaceCard({
 
   return (
     <li
+      /* How the panel finds this card again when its pin is tapped. */
+      data-place={place.id}
       className={[
         "rounded-card border bg-surface transition-colors",
         selected ? "border-ink/45 shadow-card" : "border-rule",

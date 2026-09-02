@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Category } from "../lib/categories";
 import type { TripRole } from "../lib/api/types";
 import { AvatarStack } from "../ui/Avatar";
@@ -5,6 +6,7 @@ import { countLabel, formatDateRange } from "../lib/format";
 import type { Place, Trip } from "../lib/api/types";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
+import { reveal } from "../lib/reveal";
 import { Stamp } from "../ui/Stamp";
 import { CategoryFilter } from "./CategoryFilter";
 import { PlaceCard } from "./PlaceCard";
@@ -20,6 +22,7 @@ export function PlacePanel({
   active,
   selectedId,
   onToggleCategory,
+  revealKey,
   onSelect,
   onEdit,
   onToggleVisited,
@@ -36,6 +39,9 @@ export function PlacePanel({
   counts: Record<Category, number>;
   active: Set<Category>;
   selectedId: number | null;
+  /** Bumped whenever the selection was made somewhere the list cannot see —
+   *  a pin on the map — which is when the list has to come and find it. */
+  revealKey: number;
   onToggleCategory: (category: Category) => void;
   onSelect: (id: number) => void;
   onEdit: (place: Place) => void;
@@ -48,6 +54,16 @@ export function PlacePanel({
 }) {
   const seen = places.filter((p) => p.visited).length;
   const canEdit = role !== "viewer";
+
+  /* A pin tapped on the map selects a card that may be anywhere in the list,
+     or below the fold of a sheet that is only half up. Selecting it silently
+     leaves the map looking unresponsive, so the list scrolls to it. */
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (selectedId === null) return;
+    const card = list.current?.querySelector(`[data-place="${selectedId}"]`);
+    if (card instanceof HTMLElement) reveal(card);
+  }, [revealKey, selectedId]);
 
   return (
     <>
@@ -113,7 +129,7 @@ export function PlacePanel({
         </p>
       ) : null}
 
-      <ul className="mt-3 flex flex-col gap-2.5">
+      <ul ref={list} className="mt-3 flex flex-col gap-2.5">
         {visible.map((place) => (
           <PlaceCard
             key={place.id}
