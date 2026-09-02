@@ -124,6 +124,13 @@ vi.mock("../lib/api/invitations", () => ({
   revokeInvitation: vi.fn(),
 }));
 
+/* Scrolling the selected card into view is geometry, and jsdom has none — the
+   sums are covered in lib/reveal.test.ts. What matters here is that pressing a
+   pin asks for the right card. */
+const reveal = vi.hoisted(() => vi.fn());
+
+vi.mock("../lib/reveal", () => ({ reveal }));
+
 /* The digest the screen watches, under the test's control. `useChanged` is
    kept real — how a moved stamp turns into a refetch is the thing being
    tested. Held in a box via vi.hoisted because vi.mock is lifted above the
@@ -283,6 +290,18 @@ describe("the trip screen", () => {
 
     const card = screen.getByRole("heading", { name: "Ichiran" }).closest("li")!;
     expect(within(card).getByRole("button", { current: true })).toBeInTheDocument();
+  });
+
+  it("scrolls the list to a card whose pin was pressed", async () => {
+    const user = userEvent.setup();
+    reveal.mockClear();
+    open();
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    await user.click(screen.getAllByTestId("pin").find((p) => p.dataset.title === "Ichiran")!);
+
+    const card = screen.getByRole("heading", { name: "Ichiran" }).closest("li")!;
+    expect(reveal).toHaveBeenLastCalledWith(card);
   });
 
   it("offers a way out to Google Maps for each place", async () => {

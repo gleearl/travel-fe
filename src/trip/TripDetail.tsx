@@ -31,6 +31,9 @@ export function TripDetail() {
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTrip, setEditingTrip] = useState(false);
   const [showingPeople, setShowingPeople] = useState(false);
+  /* Ticks on every selection made from the map, so the list scrolls to the
+     card even when the same pin is tapped twice. */
+  const [revealKey, setRevealKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,10 +103,11 @@ export function TripDetail() {
 
   /* Selecting from the map brings the sheet down to where the card is
      readable and the pin is still visible; selecting from the list leaves the
-     sheet where it is. */
+     sheet where it is. Either way the panel scrolls the card into view. */
   const selectFromMap = useCallback((placeId: number) => {
     setSelectedId(placeId);
     setSnap((current) => (current === "full" ? "half" : current));
+    setRevealKey((n) => n + 1);
   }, []);
 
   const replacePlace = useCallback((saved: Place) => {
@@ -164,6 +168,7 @@ export function TripDetail() {
       counts={counts}
       active={active}
       selectedId={selectedId}
+      revealKey={revealKey}
       onToggleCategory={(category) =>
         setActive((current) => {
           const next = new Set(current);

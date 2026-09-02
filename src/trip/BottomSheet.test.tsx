@@ -39,6 +39,34 @@ describe("the three stops", () => {
   });
 });
 
+/* Everything below the fold ────────────────────────────────────────────────
+   The sheet is its full height at every stop and hangs the rest of itself off
+   the bottom of the screen. Without matching padding the last stretch of the
+   list lives down there, where scrolling cannot bring it up. */
+describe("reaching the end of the list", () => {
+  const body = () => sheet().querySelector("[style*='--hidden-bottom']") as HTMLElement;
+
+  it("pads the list by however much of the sheet is off the screen", () => {
+    render(<Harness initial="peek" />);
+
+    const off = 812 * 0.92 - 148;
+    expect(body().style.getPropertyValue("--hidden-bottom")).toBe(`${off}px`);
+    expect(body().style.paddingBottom).toContain(`${off}px`);
+  });
+
+  it("keeps the safe area underneath the padding", () => {
+    render(<Harness initial="half" />);
+
+    expect(body().style.paddingBottom).toContain("env(safe-area-inset-bottom)");
+  });
+
+  it("needs none of it once the sheet covers the screen", () => {
+    render(<Harness initial="full" />);
+
+    expect(body().style.getPropertyValue("--hidden-bottom")).toBe("0px");
+  });
+});
+
 describe("without a pointer", () => {
   it("opens and closes from the handle, for anyone using a keyboard", async () => {
     const user = userEvent.setup();

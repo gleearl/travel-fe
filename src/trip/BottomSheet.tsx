@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 
 /* The list of places, over the map, on a phone.
 
@@ -158,7 +158,27 @@ export function BottomSheet({
         </button>
       </header>
 
-      <div ref={body} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      {/* The sheet keeps its full height at every stop and hangs the rest of
+          itself below the window, so at peek and half the last stretch of the
+          list sits off the bottom of the screen where no amount of scrolling
+          reaches it. Padding the run of the list by exactly that much gives
+          the last card somewhere to go — and `--hidden-bottom` tells anything
+          scrolling a card into view where looking actually stops.
+
+          Both take the settled stop rather than the live drag: resizing the
+          run of the list on every pointer move would relayout the whole list
+          under the thumb, and the padding is below the content anyway, so
+          dragging up still uncovers cards rather than blank paper. */}
+      <div
+        ref={body}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4"
+        style={
+          {
+            "--hidden-bottom": `${offsetFor(snap)}px`,
+            paddingBottom: `calc(max(1.5rem, env(safe-area-inset-bottom)) + ${offsetFor(snap)}px)`,
+          } as CSSProperties
+        }
+      >
         {children}
       </div>
     </section>
