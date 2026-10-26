@@ -42,7 +42,7 @@ export function PlaceCard({
       data-place={place.id}
       className={[
         "rounded-card border bg-surface transition-colors",
-        selected ? "border-ink/45 shadow-card" : "border-rule",
+        selected ? "border-active shadow-card ring-1 ring-active" : "border-rule",
       ].join(" ")}
     >
       <button

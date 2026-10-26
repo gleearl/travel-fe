@@ -29,14 +29,22 @@
 
   /* ── Categories ───────────────────────────────────────────────────────
      One per kind of place: the pin's fill, the card's mark, the filter chip.
-     Chosen dark enough to also be text on paper (all ≥ 4.5:1), because the
+     Five hues spread round the wheel — red, amber, blue, violet, slate — so
+     no two can be mistaken for each other at pin size on the map. Each is
+     still dark enough to be text on paper (all ≥ 5.4:1), because the
      category is always written as well as coloured — colour alone would
      leave anyone who can't separate these hues with nothing to read. */
-  --color-food: #b03d10;
-  --color-cafe: #8a5a12;
-  --color-sight: #146955;
-  --color-shopping: #8a3357;
-  --color-other: #4f4a43;
+  --color-food: #c4231b;
+  --color-cafe: #975400;
+  --color-sight: #1a5fd0;
+  --color-shopping: #9b2fae;
+  --color-other: #4f5a66;
+
+  /* ── Active ───────────────────────────────────────────────────────────
+     The place you have picked: its pin and its card. Ink rather than a sixth
+     hue, so it can never be read as one more kind of place, and it is the
+     strongest contrast on both the quiet map and the paper (14.9:1). */
+  --color-active: #1c1a17;
 
   /* ── Accent ───────────────────────────────────────────────────────────
      The one non-category colour, used for the thing you are meant to press.

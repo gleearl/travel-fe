@@ -258,9 +258,22 @@ function applyPinStyle(element: HTMLElement, place: Place, selected: boolean): v
   element.setAttribute("aria-label", place.name);
   element.style.width = `${size}px`;
   element.style.height = `${size}px`;
+
+  /* The picked pin goes ink, whatever its kind, with the category kept as an
+     outer ring — so it stands apart from every other pin and still says what
+     it is. Raised too, so a neighbour can't sit on top of it. */
+  if (selected) {
+    element.style.background = "var(--color-active)";
+    element.style.border = "2.5px solid var(--color-paper)";
+    element.style.boxShadow = `0 0 0 2.5px ${colour}, var(--shadow-pin)`;
+    element.style.zIndex = "2";
+    return;
+  }
+
   element.style.background = place.visited ? "var(--color-paper)" : colour;
   element.style.border = place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)";
-  element.style.boxShadow = selected ? "var(--shadow-pin)" : "0 1px 3px rgb(28 26 23 / 0.3)";
+  element.style.boxShadow = "0 1px 3px rgb(28 26 23 / 0.3)";
+  element.style.zIndex = "";
 }
 
 /** The centre a new pin should default to when there is nothing to fit. */

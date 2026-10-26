@@ -46,6 +46,18 @@ describe("keeping a pin where it belongs", () => {
     expect(marker.getElement().style.width).toBe("18px");
   });
 
+  it("colours the selected pin apart from every category, and back again", () => {
+    const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
+    expect(marker.getElement().style.background).toContain("--color-cafe");
+
+    syncPin(marker, place({ visited: true }), true);
+    expect(marker.getElement().style.background).toContain("--color-active");
+    expect(marker.getElement().style.boxShadow).toContain("--color-cafe");
+
+    syncPin(marker, place(), false);
+    expect(marker.getElement().style.background).toContain("--color-cafe");
+  });
+
   it("moves the pin when the place does", () => {
     const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
 
