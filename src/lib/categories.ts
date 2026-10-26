@@ -1,4 +1,4 @@
-/* The five kinds of place, in the order they appear as filter chips.
+/* The six kinds of place, in the order they appear as filter chips.
    `color` is a CSS custom property rather than a hex value: the palette lives
    in theme.css, and a pin drawn from a literal here would drift from it. */
 
@@ -7,6 +7,7 @@ export const CATEGORIES = [
   { id: "cafe", label: "Cafe", color: "var(--color-cafe)" },
   { id: "sight", label: "Sight", color: "var(--color-sight)" },
   { id: "shopping", label: "Shopping", color: "var(--color-shopping)" },
+  { id: "club", label: "Club", color: "var(--color-club)" },
   { id: "other", label: "Other", color: "var(--color-other)" },
 ] as const;
 

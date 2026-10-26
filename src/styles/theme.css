@@ -29,15 +29,16 @@
 
   /* ── Categories ───────────────────────────────────────────────────────
      One per kind of place: the pin's fill, the card's mark, the filter chip.
-     Five hues spread round the wheel — red, amber, blue, violet, slate — so
-     no two can be mistaken for each other at pin size on the map. Each is
-     still dark enough to be text on paper (all ≥ 5.4:1), because the
+     Six hues spread round the wheel — red, amber, green, blue, violet,
+     slate — so no two can be mistaken for each other at pin size on the map.
+     Each is still dark enough to be text on paper (all ≥ 5:1), because the
      category is always written as well as coloured — colour alone would
      leave anyone who can't separate these hues with nothing to read. */
   --color-food: #c4231b;
   --color-cafe: #975400;
   --color-sight: #1a5fd0;
   --color-shopping: #9b2fae;
+  --color-club: #147a3c;
   --color-other: #4f5a66;
 
   /* ── Active ───────────────────────────────────────────────────────────

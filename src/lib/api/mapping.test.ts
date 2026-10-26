@@ -92,6 +92,12 @@ describe("trips", () => {
     expect(place.lng).toBeCloseTo(139.7967412, 7);
   });
 
+  it("knows a club as a kind of its own", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { id: 1, places: [{ id: 9, lat: "1", lng: "1", category: "club" }] } }));
+
+    expect((await fetchTrip(1)).places[0].category).toBe("club");
+  });
+
   it("falls back to 'other' rather than a pin with no colour", async () => {
     fetchMock.mockResolvedValueOnce(
       json({ data: { id: 1, places: [{ id: 9, lat: "1", lng: "1", category: "nightclub" }] } }),
