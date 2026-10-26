@@ -16,12 +16,17 @@ export function Sheet({
   onClose,
   children,
   footer,
+  focusField = true,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   /** Stays put above the keyboard while the body scrolls. */
   footer?: ReactNode;
+  /** False to open on Close instead of the first field — for a sheet that is
+   *  read top to bottom before anything is typed, where jumping to a field
+   *  further down would scroll its first sections out of view. */
+  focusField?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -59,11 +64,12 @@ export function Sheet({
      in the panel, and landing there means typing goes nowhere. Fields only —
      a sheet with none of them starts on Close, which is at least somewhere. */
   useEffect(() => {
-    const field = panel.current?.querySelector<HTMLElement>(
-      'input:not([type="hidden"]), textarea, select',
-    );
+    const field = focusField
+      ? panel.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select')
+      : null;
 
     (field ?? closeButton.current)?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on open only, see above
   }, []);
 
   return (

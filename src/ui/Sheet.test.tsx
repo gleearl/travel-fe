@@ -48,6 +48,15 @@ describe("where focus lands", () => {
     );
     expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
   });
+
+  it("can be told to start on Close even with fields, so it opens at the top", () => {
+    render(
+      <Sheet title="Edit 3 places" onClose={() => {}} focusField={false}>
+        <Field label="Add tags" />
+      </Sheet>,
+    );
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+  });
 });
 
 describe("focus while the screen behind re-renders", () => {

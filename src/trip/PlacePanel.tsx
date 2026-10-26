@@ -10,6 +10,7 @@ import { reveal } from "../lib/reveal";
 import { Stamp } from "../ui/Stamp";
 import { CategoryFilter } from "./CategoryFilter";
 import { PlaceCard } from "./PlaceCard";
+import { SelectionBar } from "./SelectionBar";
 import { TagFilter } from "./TagFilter";
 
 /* Everything beside the map: the trip's own line, the filter, and the list.
@@ -29,7 +30,13 @@ export function PlacePanel({
   revealKey,
   onSelect,
   onView,
-  onToggleVisited,
+  choosing,
+  chosen,
+  onChoosing,
+  onChosenChange,
+  onBulkVisited,
+  onBulkEdit,
+  onBulkDelete,
   onAdd,
   onEditTrip,
   role,
@@ -53,7 +60,14 @@ export function PlacePanel({
   onToggleTag: (tag: string) => void;
   onSelect: (id: number) => void;
   onView: (place: Place) => void;
-  onToggleVisited: (place: Place) => void;
+  /** Picking several places to act on together — editors only. */
+  choosing: boolean;
+  chosen: Set<number>;
+  onChoosing: (on: boolean) => void;
+  onChosenChange: (ids: Set<number>) => void;
+  onBulkVisited: (visited: boolean) => Promise<void>;
+  onBulkEdit: () => void;
+  onBulkDelete: () => Promise<void>;
   onAdd: () => void;
   onEditTrip: () => void;
   /** What this account may do here. The only thing gating any control below. */
@@ -142,7 +156,20 @@ export function PlacePanel({
         </p>
       ) : null}
 
-      <ul ref={list} className="mt-3 flex flex-col gap-2.5">
+      {visible.length > 0 ? (
+        <div className="mt-3 flex min-h-9 items-center justify-between gap-3">
+          {/* Only when a filter is hiding some: otherwise the count is
+              already in the trip's own line above. */}
+          <Stamp>{visible.length < places.length ? `Showing ${visible.length} of ${places.length}` : ""}</Stamp>
+          {canEdit ? (
+            <Button size="sm" variant={choosing ? "primary" : "secondary"} onClick={() => onChoosing(!choosing)}>
+              {choosing ? "Done" : "Select"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <ul ref={list} className="mt-2 flex flex-col gap-2.5">
         {visible.map((place) => (
           <PlaceCard
             key={place.id}
@@ -153,12 +180,30 @@ export function PlacePanel({
               onSelect(place.id);
               onView(place);
             }}
-            onToggleVisited={() => onToggleVisited(place)}
-            canEdit={canEdit}
             ownerId={trip.owner?.id ?? null}
+            choosing={choosing}
+            chosen={chosen.has(place.id)}
+            onToggleChosen={() => {
+              const next = new Set(chosen);
+              next.has(place.id) ? next.delete(place.id) : next.add(place.id);
+              onChosenChange(next);
+            }}
           />
         ))}
       </ul>
+
+      {choosing ? (
+        <SelectionBar
+          count={chosen.size}
+          total={visible.length}
+          allVisited={visible.filter((p) => chosen.has(p.id)).every((p) => p.visited)}
+          onSelectAll={() => onChosenChange(new Set(visible.map((p) => p.id)))}
+          onClear={() => onChosenChange(new Set())}
+          onMarkVisited={onBulkVisited}
+          onEdit={onBulkEdit}
+          onDelete={onBulkDelete}
+        />
+      ) : null}
     </>
   );
 }

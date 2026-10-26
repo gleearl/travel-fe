@@ -60,6 +60,7 @@ const TRIP: Trip = {
 
 const fetchTrip = vi.fn();
 const updatePlace = vi.fn();
+const deletePlace = vi.fn();
 
 vi.mock("../lib/api/trips", () => ({
   fetchTrip: (id: number) => fetchTrip(id),
@@ -149,7 +150,7 @@ vi.mock("../live/useLiveUpdates", async (importOriginal) => ({
 vi.mock("../lib/api/places", () => ({
   updatePlace: (id: number, input: unknown) => updatePlace(id, input),
   createPlace: vi.fn(),
-  deletePlace: vi.fn(),
+  deletePlace: (id: number) => deletePlace(id),
 }));
 
 function open() {
@@ -167,6 +168,7 @@ function open() {
 beforeEach(() => {
   fetchTrip.mockReset().mockResolvedValue(structuredClone(TRIP));
   updatePlace.mockReset().mockImplementation((id, input) => Promise.resolve({ ...input, id }));
+  deletePlace.mockReset().mockResolvedValue(undefined);
   searchPlaces.mockReset().mockResolvedValue([]);
   resolveMapLink.mockReset();
   searchLibrary.mockReset().mockResolvedValue([]);
@@ -265,9 +267,11 @@ describe("the trip screen", () => {
     open();
 
     const card = (await screen.findByRole("heading", { name: "Ichiran" })).closest("li")!;
-    await user.click(within(card).getByRole("button", { name: "Been" }));
+    await user.click(within(card).getByRole("button", { name: "View Ichiran" }));
+    const sheet = screen.getByRole("dialog", { name: "Ichiran" });
+    await user.click(within(sheet).getByRole("button", { name: "Mark as been" }));
 
-    expect(within(card).getByRole("button", { name: "Not yet" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Not been yet" })).toBeInTheDocument();
     expect(updatePlace).toHaveBeenCalledWith(3, expect.objectContaining({ visited: true }));
   });
 
@@ -277,9 +281,11 @@ describe("the trip screen", () => {
     open();
 
     const card = (await screen.findByRole("heading", { name: "Ichiran" })).closest("li")!;
-    await user.click(within(card).getByRole("button", { name: "Been" }));
+    await user.click(within(card).getByRole("button", { name: "View Ichiran" }));
+    const sheet = screen.getByRole("dialog", { name: "Ichiran" });
+    await user.click(within(sheet).getByRole("button", { name: "Mark as been" }));
 
-    expect(await within(card).findByRole("button", { name: "Been" })).toBeInTheDocument();
+    expect(await within(sheet).findByRole("button", { name: "Mark as been" })).toBeInTheDocument();
   });
 
   it("selects the matching card when its pin is pressed", async () => {
@@ -532,7 +538,7 @@ describe("the trip screen", () => {
 
     expect(screen.queryByRole("button", { name: "Add place" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Been" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument();
   });
 
   it("tells a viewer why those controls are missing", async () => {
@@ -559,8 +565,7 @@ describe("the trip screen", () => {
     expect(screen.getByRole("button", { name: "Add place" })).toBeInTheDocument();
     expect(screen.queryByText("View only")).not.toBeInTheDocument();
 
-    const card = screen.getByRole("heading", { name: "Ichiran" }).closest("li")!;
-    expect(within(card).getByRole("button", { name: "Been" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
   });
 
   it("will not open the place form when a viewer presses the map", async () => {
@@ -824,5 +829,137 @@ describe("tags, and looking at a place", () => {
     const sheet = screen.getByRole("dialog", { name: "Ichiran" });
     expect(within(sheet).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("link", { name: "Ichiran in Google Maps" })).toBeInTheDocument();
+  });
+});
+
+describe("acting on several places at once", () => {
+  async function startChoosing(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole("heading", { name: "Japan 2026" });
+    await user.click(screen.getByRole("button", { name: "Select" }));
+  }
+  const pick = (user: ReturnType<typeof userEvent.setup>, name: string) =>
+    user.click(screen.getByRole("checkbox", { name }));
+  const bar = () => screen.getByRole("region", { name: "Selected places" });
+
+  it("has no Been button on a card any more", async () => {
+    open();
+    const card = (await screen.findByRole("heading", { name: "Ichiran" })).closest("li")!;
+
+    expect(within(card).queryByRole("button", { name: "Been" })).not.toBeInTheDocument();
+  });
+
+  it("turns the cards into checkboxes and counts what is picked", async () => {
+    const user = userEvent.setup();
+    open();
+    await startChoosing(user);
+
+    await pick(user, "Ichiran");
+    await pick(user, "Fuglen Asakusa");
+
+    expect(within(bar()).getByText("2 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Ichiran" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("marks every picked place as been in one go", async () => {
+    const user = userEvent.setup();
+    open();
+    await startChoosing(user);
+    await pick(user, "Ichiran");
+    await pick(user, "Fuglen Asakusa");
+
+    await user.click(within(bar()).getByRole("button", { name: "Mark as been" }));
+
+    expect(updatePlace).toHaveBeenCalledWith(3, expect.objectContaining({ visited: true }));
+    expect(updatePlace).toHaveBeenCalledWith(1, expect.objectContaining({ visited: true }));
+    expect(screen.getByText("3 seen")).toBeInTheDocument();
+  });
+
+  it("asks before deleting, then deletes every picked place", async () => {
+    const user = userEvent.setup();
+    open();
+    await startChoosing(user);
+    await pick(user, "Ichiran");
+    await pick(user, "Fuglen Asakusa");
+
+    await user.click(within(bar()).getByRole("button", { name: "Delete" }));
+    expect(deletePlace).not.toHaveBeenCalled();
+    await user.click(within(bar()).getByRole("button", { name: "Delete 2 places" }));
+
+    expect(deletePlace).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("heading", { name: "Ichiran" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "teamLab Borderless" })).toBeInTheDocument();
+  });
+
+  it("locks the kind and been-there when the picked places differ", async () => {
+    const user = userEvent.setup();
+    open();
+    await startChoosing(user);
+    await pick(user, "Ichiran");
+    await pick(user, "teamLab Borderless");
+    await user.click(within(bar()).getByRole("button", { name: "Edit" }));
+
+    const sheet = screen.getByRole("dialog", { name: "Edit 2 places" });
+    expect(within(sheet).getByText("Mixed: Sight, Food")).toBeInTheDocument();
+    expect(within(sheet).getByText("Mixed: some been, some not yet")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Cafe" })).not.toBeInTheDocument();
+  });
+
+  it("adds a tag to all, removes a shared one, and leaves the rest alone", async () => {
+    const user = userEvent.setup();
+    open();
+    await startChoosing(user);
+    await pick(user, "Ichiran");
+    await pick(user, "Fuglen Asakusa");
+    await user.click(within(bar()).getByRole("button", { name: "Edit" }));
+
+    const sheet = screen.getByRole("dialog", { name: "Edit 2 places" });
+    // "Late night" is only on Ichiran, so it is shown but cannot be touched.
+    expect(within(within(sheet).getByRole("list", { name: "Tags on some of them" })).getByText("Late night")).toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole("button", { name: "Remove Must try from all" }));
+    await user.click(within(sheet).getByRole("button", { name: "Street food" }));
+    await user.click(within(sheet).getByRole("button", { name: "Save to 2 places" }));
+
+    expect(updatePlace).toHaveBeenCalledWith(
+      3,
+      expect.objectContaining({ tags: ["Late night", "Street food"], name: "Ichiran" }),
+    );
+    expect(updatePlace).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ tags: ["Local favourite", "Quiet", "Great view", "Street food"] }),
+    );
+    expect(screen.queryByRole("dialog", { name: "Edit 2 places" })).not.toBeInTheDocument();
+  });
+
+  it("changes the kind of places that already share one", async () => {
+    const user = userEvent.setup();
+    fetchTrip.mockResolvedValue({
+      ...structuredClone(TRIP),
+      places: [...structuredClone(TRIP).places, place({ id: 4, name: "Afuri", category: "food" })],
+    });
+    open();
+    await startChoosing(user);
+    await pick(user, "Ichiran");
+    await pick(user, "Afuri");
+    await user.click(within(bar()).getByRole("button", { name: "Edit" }));
+
+    const sheet = screen.getByRole("dialog", { name: "Edit 2 places" });
+    await user.click(within(sheet).getByRole("button", { name: "Cafe" }));
+    await user.click(within(sheet).getByRole("button", { name: "Save to 2 places" }));
+
+    expect(updatePlace).toHaveBeenCalledWith(4, expect.objectContaining({ category: "cafe" }));
+    expect(updatePlace).toHaveBeenCalledWith(3, expect.objectContaining({ category: "cafe" }));
+  });
+
+  it("selects every place on screen, and only those", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByRole("heading", { name: "Japan 2026" });
+    await user.click(screen.getByRole("button", { name: /^Food/ }));
+    await user.click(screen.getByRole("button", { name: "Select" }));
+
+    await user.click(within(bar()).getByRole("button", { name: "Select all 1" }));
+
+    expect(within(bar()).getByText("1 selected")).toBeInTheDocument();
   });
 });

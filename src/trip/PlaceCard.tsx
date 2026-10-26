@@ -10,26 +10,29 @@ import { TagList } from "../ui/TagChip";
    as coloured, and whatever you wrote down about it.
 
    The whole card is the button that selects the pin — a card you can read but
-   not press would leave the map reachable only by aiming at an 18px circle. */
+   not press would leave the map reachable only by aiming at an 18px circle.
+   While choosing several places at once, the same press ticks it instead. */
 export function PlaceCard({
   place,
   selected,
   onSelect,
   onView,
-  onToggleVisited,
-  canEdit,
   ownerId,
+  choosing = false,
+  chosen = false,
+  onToggleChosen,
 }: {
   place: Place;
   selected: boolean;
   onSelect: () => void;
   /** Opens the whole place — every tag, the full note, and Edit for those who may. */
   onView: () => void;
-  onToggleVisited: () => void;
-  /** False for a viewer, who can read the card and follow its links, no more. */
-  canEdit: boolean;
   /** Whose trip this is, which is what makes an "added by" worth drawing. */
   ownerId: number | null;
+  /** True while several places are being picked to act on together. */
+  choosing?: boolean;
+  chosen?: boolean;
+  onToggleChosen?: () => void;
 }) {
   const category = categoryOf(place.category);
 
@@ -44,16 +47,34 @@ export function PlaceCard({
       data-place={place.id}
       className={[
         "rounded-card border bg-surface transition-colors",
-        selected ? "border-active shadow-card ring-1 ring-active" : "border-rule",
+        (choosing ? chosen : selected) ? "border-active shadow-card ring-1 ring-active" : "border-rule",
       ].join(" ")}
     >
       <button
         type="button"
-        onClick={onSelect}
-        aria-current={selected ? "true" : undefined}
+        onClick={choosing ? onToggleChosen : onSelect}
+        role={choosing ? "checkbox" : undefined}
+        aria-checked={choosing ? chosen : undefined}
+        aria-current={!choosing && selected ? "true" : undefined}
+        aria-label={choosing ? place.name : undefined}
         className="block w-full px-3.5 py-3 text-left"
       >
         <div className="flex items-start gap-2.5">
+          {choosing ? (
+            <span
+              aria-hidden="true"
+              className={[
+                "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[5px] border-[1.5px]",
+                chosen ? "border-active bg-active text-paper" : "border-rule-strong bg-surface",
+              ].join(" ")}
+            >
+              {chosen ? (
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <path d="M2.5 6.2l2.4 2.4 4.6-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : null}
+            </span>
+          ) : null}
           <span
             aria-hidden="true"
             className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-pill"
@@ -110,61 +131,52 @@ export function PlaceCard({
           The links sit here rather than up on the address line, where they
           belong: an <a> cannot be nested inside a <button>, and the whole card
           body is the button that selects the pin. */}
-      <div className="flex items-center gap-1 border-t border-rule px-2 py-1">
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={onToggleVisited}
-            aria-pressed={place.visited}
-            className="stamp min-h-9 rounded-card px-2 text-ink-2 hover:bg-accent-soft hover:text-ink"
-          >
-            {place.visited ? "Not yet" : "Been"}
-          </button>
-        ) : null}
-
-        <a
-          href={googleMapsUrl(place)}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label={`${place.name} in Google Maps`}
-          className="stamp min-h-9 rounded-card px-2 leading-9 text-ink-2 hover:bg-accent-soft hover:text-ink"
-        >
-          Maps ↗
-        </a>
-
-        {place.link ? (
-          /* A mark rather than a word, so it reads as the source it came from
-             rather than as another thing to press. Padded out to the same
-             height as its neighbours all the same: 16px of ink is not a
-             thumb-sized target. */
+      {choosing ? null : (
+        <div className="flex items-center gap-1 border-t border-rule px-2 py-1">
           <a
-            href={place.link}
+            href={googleMapsUrl(place)}
             target="_blank"
             rel="noreferrer noopener"
-            aria-label={`Post about ${place.name}`}
-            className="flex min-h-9 items-center rounded-card px-2 text-ink-3 hover:bg-accent-soft hover:text-ink"
+            aria-label={`${place.name} in Google Maps`}
+            className="stamp min-h-9 rounded-card px-2 leading-9 text-ink-2 hover:bg-accent-soft hover:text-ink"
           >
-            <InstagramMark />
+            Maps ↗
           </a>
-        ) : null}
 
-        <div className="ml-auto flex items-center gap-1">
-          {addedBy ? (
-            <Avatar name={addedBy.name} size={20} title={`Added by ${addedBy.name}`} />
+          {place.link ? (
+            /* A mark rather than a word, so it reads as the source it came from
+               rather than as another thing to press. Padded out to the same
+               height as its neighbours all the same: 16px of ink is not a
+               thumb-sized target. */
+            <a
+              href={place.link}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label={`Post about ${place.name}`}
+              className="flex min-h-9 items-center rounded-card px-2 text-ink-3 hover:bg-accent-soft hover:text-ink"
+            >
+              <InstagramMark />
+            </a>
           ) : null}
 
-          {/* For everyone, viewers included: reading the whole place is not
-              an edit, and Edit itself lives one step in, inside View. */}
-          <button
-            type="button"
-            onClick={onView}
-            aria-label={`View ${place.name}`}
-            className="stamp min-h-9 rounded-card px-2 text-ink hover:bg-accent-soft"
-          >
-            View
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            {addedBy ? (
+              <Avatar name={addedBy.name} size={20} title={`Added by ${addedBy.name}`} />
+            ) : null}
+
+            {/* For everyone, viewers included: reading the whole place is not
+                an edit, and Edit itself lives one step in, inside View. */}
+            <button
+              type="button"
+              onClick={onView}
+              aria-label={`View ${place.name}`}
+              className="stamp min-h-9 rounded-card px-2 text-ink hover:bg-accent-soft"
+            >
+              View
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </li>
   );
 }

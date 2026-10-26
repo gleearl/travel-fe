@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { CATEGORY_IDS, type Category } from "../lib/categories";
 import { hasTag, sameTag, tagsInUse } from "../lib/tags";
-import { updatePlace } from "../lib/api/places";
+import { deletePlace, updatePlace } from "../lib/api/places";
+import { applyChanges, type BulkChanges } from "../lib/bulk";
 import { fetchTrip } from "../lib/api/trips";
 import type { Place, Trip } from "../lib/api/types";
 import { useChanged, useLiveUpdates } from "../live/useLiveUpdates";
@@ -10,6 +11,7 @@ import { DESKTOP, useMediaQuery } from "../lib/useMediaQuery";
 import { AppHeader } from "../ui/AppHeader";
 import { TripForm } from "../trips/TripForm";
 import { BottomSheet, type Snap } from "./BottomSheet";
+import { BulkEditSheet } from "./BulkEditSheet";
 import { PeopleSheet } from "./PeopleSheet";
 import { PlaceDetail } from "./PlaceDetail";
 import { PlaceForm } from "./PlaceForm";
@@ -33,6 +35,10 @@ export function TripDetail() {
   /* The place open in View, by id rather than by value: a live update or a
      save swaps the place object out, and View should show the new one. */
   const [viewingId, setViewingId] = useState<number | null>(null);
+  /* Several places picked to act on at once. */
+  const [choosing, setChoosing] = useState(false);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  const [bulkEditing, setBulkEditing] = useState(false);
   const [snap, setSnap] = useState<Snap>("half");
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTrip, setEditingTrip] = useState(false);
@@ -128,6 +134,24 @@ export function TripDetail() {
 
   const viewing = places.find((p) => p.id === viewingId) ?? null;
 
+  /* What you act on is what you can see: a place filtered out of view, or
+     deleted by someone else, drops out of the selection rather than being
+     changed off screen. */
+  useEffect(() => {
+    setChosen((current) => {
+      const kept = new Set([...current].filter((id) => visible.some((p) => p.id === id)));
+      return kept.size === current.size ? current : kept;
+    });
+  }, [visible]);
+
+  const chosenPlaces = places.filter((p) => chosen.has(p.id));
+
+  function stopChoosing() {
+    setChoosing(false);
+    setChosen(new Set());
+    setBulkEditing(false);
+  }
+
   const defaultPoint = useDefaultPoint(trip ?? ({ destinationLat: null, destinationLng: null } as Trip), places);
 
   /* Selecting from the map brings the sheet down to where the card is
@@ -168,6 +192,45 @@ export function TripDetail() {
       // Take the update we waved away while this was in the air.
       if (writing.current === 0 && missed.current) reloadTrip();
     }
+  }
+
+  /* Every place saved in parallel. One that fails is put back the way it was
+     and the rest stand — and the caller hears how many did not make it. */
+  async function saveEach(targets: Place[], changes: BulkChanges, optimistic: boolean) {
+    if (optimistic) for (const place of targets) replacePlace({ ...place, ...applyChanges(place, changes) });
+    writing.current += 1;
+    try {
+      const results = await Promise.allSettled(
+        targets.map((place) => updatePlace(place.id, applyChanges(place, changes))),
+      );
+      results.forEach((result, i) => replacePlace(result.status === "fulfilled" ? result.value : targets[i]));
+      const failures = results.filter((r) => r.status === "rejected").length;
+      if (failures > 0) {
+        throw new Error(`Couldn't save ${failures} of ${targets.length}. Check your connection and try again.`);
+      }
+    } finally {
+      writing.current -= 1;
+      if (writing.current === 0 && missed.current) reloadTrip();
+    }
+  }
+
+  async function bulkVisited(visited: boolean) {
+    await saveEach(chosenPlaces, { visited, addTags: [], removeTags: [] }, true).catch(() => undefined);
+  }
+
+  async function bulkSave(changes: BulkChanges) {
+    await saveEach(chosenPlaces, changes, false);
+    stopChoosing();
+  }
+
+  async function bulkDelete() {
+    const results = await Promise.allSettled(chosenPlaces.map((place) => deletePlace(place.id)));
+    const gone = new Set(chosenPlaces.filter((_, i) => results[i].status === "fulfilled").map((p) => p.id));
+    setTrip((current) => (current ? { ...current, places: current.places.filter((p) => !gone.has(p.id)) } : current));
+    setSelectedId((current) => (current !== null && gone.has(current) ? null : current));
+    // Whatever could not be deleted stays picked, so trying again is one press.
+    if (gone.size === chosenPlaces.length) stopChoosing();
+    else setChosen(new Set(chosenPlaces.filter((p) => !gone.has(p.id)).map((p) => p.id)));
   }
 
   if (failed) {
@@ -214,7 +277,13 @@ export function TripDetail() {
       }
       onSelect={setSelectedId}
       onView={(place) => setViewingId(place.id)}
-      onToggleVisited={toggleVisited}
+      choosing={choosing}
+      chosen={chosen}
+      onChoosing={(on) => (on ? setChoosing(true) : stopChoosing())}
+      onChosenChange={setChosen}
+      onBulkVisited={bulkVisited}
+      onBulkEdit={() => setBulkEditing(true)}
+      onBulkDelete={bulkDelete}
       onAdd={() => setEditing({ kind: "new", at: defaultPoint })}
       onEditTrip={() => setEditingTrip(true)}
       role={trip.role}
@@ -295,6 +364,10 @@ export function TripDetail() {
             setEditing(null);
           }}
         />
+      ) : null}
+
+      {bulkEditing && chosenPlaces.length > 0 ? (
+        <BulkEditSheet places={chosenPlaces} onClose={() => setBulkEditing(false)} onSave={bulkSave} />
       ) : null}
 
       {showingPeople ? (

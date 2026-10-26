@@ -9,13 +9,27 @@ import { Field } from "../ui/Field";
    suggestions down to what matches, so finding one never means scanning them
    all, and a group with nothing left to offer disappears rather than showing
    an empty heading. */
-export function TagPicker({ value, onChange }: { value: string[]; onChange: (tags: string[]) => void }) {
+export function TagPicker({
+  value,
+  onChange,
+  label = "Tags",
+  exclude = [],
+  max = MAX_TAGS,
+}: {
+  value: string[];
+  onChange: (tags: string[]) => void;
+  label?: string;
+  /** Tags already there by some other route, so not worth suggesting again. */
+  exclude?: readonly string[];
+  /** How many more this can take — fewer than MAX_TAGS when some are already on. */
+  max?: number;
+}) {
   const [draft, setDraft] = useState("");
-  const full = value.length >= MAX_TAGS;
+  const full = value.length >= max;
 
   function add(tag: string) {
     const clean = cleanTag(tag);
-    if (clean === "" || full || hasTag(value, clean)) return;
+    if (clean === "" || full || hasTag(value, clean) || hasTag(exclude, clean)) return;
     onChange([...value, clean]);
     setDraft("");
   }
@@ -27,19 +41,24 @@ export function TagPicker({ value, onChange }: { value: string[]; onChange: (tag
   const query = draft.trim().toLowerCase();
   const groups = TAG_GROUPS.map((group) => ({
     label: group.label,
-    tags: group.tags.filter((tag) => !hasTag(value, tag) && tag.toLowerCase().includes(query)),
+    tags: group.tags.filter(
+      (tag) => !hasTag(value, tag) && !hasTag(exclude, tag) && tag.toLowerCase().includes(query),
+    ),
   })).filter((group) => group.tags.length > 0);
 
   /* What you typed, offered as a tag of its own — unless it already is one,
      in which case the suggestion below is the thing to press. */
   const custom = cleanTag(draft);
   const offerCustom =
-    custom !== "" && !hasTag(value, custom) && !TAG_GROUPS.some((g) => hasTag(g.tags, custom));
+    custom !== "" &&
+    !hasTag(value, custom) &&
+    !hasTag(exclude, custom) &&
+    !TAG_GROUPS.some((g) => hasTag(g.tags, custom));
 
   return (
     <div>
       <Field
-        label="Tags"
+        label={label}
         value={draft}
         maxLength={MAX_TAG_LENGTH}
         disabled={full}
