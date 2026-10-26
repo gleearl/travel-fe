@@ -12,6 +12,7 @@ import { Button } from "../ui/Button";
 import { Field, TextArea } from "../ui/Field";
 import { Sheet } from "../ui/Sheet";
 import { Stamp } from "../ui/Stamp";
+import { TagPicker } from "./TagPicker";
 
 export function PlaceForm({
   tripId,
@@ -39,6 +40,7 @@ export function PlaceForm({
           lat: startingPoint.lat,
           lng: startingPoint.lng,
           category: "other",
+          tags: [],
           link: "",
           notes: "",
           visited: false,
@@ -148,6 +150,13 @@ export function PlaceForm({
               );
             })}
           </div>
+        </div>
+
+        <div>
+          <TagPicker value={form.tags} onChange={(tags) => set("tags", tags)} />
+          {error?.fieldError("tags") ? (
+            <p className="mt-1.5 text-[0.8125rem] text-danger">{error.fieldError("tags")}</p>
+          ) : null}
         </div>
 
         <Field

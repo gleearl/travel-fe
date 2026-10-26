@@ -15,6 +15,7 @@ const place = (over: Partial<Place>): Place => ({
   lat: 35.7,
   lng: 139.8,
   category: "other",
+  tags: [],
   link: "",
   notes: "",
   visited: false,
@@ -44,6 +45,7 @@ const TRIP: Trip = {
       category: "cafe",
       link: "https://instagram.com/p/abc123",
       notes: "try the honey toast",
+      tags: ["Must try", "Local favourite", "Quiet", "Great view"],
     }),
     place({
       id: 2,
@@ -52,7 +54,7 @@ const TRIP: Trip = {
       visited: true,
       addedBy: { id: 4, name: "Ana Lopez" },
     }),
-    place({ id: 3, name: "Ichiran", category: "food" }),
+    place({ id: 3, name: "Ichiran", category: "food", tags: ["Late night", "Must try"] }),
   ],
 };
 
@@ -712,5 +714,115 @@ describe("keeping up with everyone else", () => {
     /* Before this, the only way to find out was to close the sheet and open it
        again — the remount was the refresh. */
     await vi.waitFor(() => expect(fetchMembers).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("tags, and looking at a place", () => {
+  const cardFor = async (name: string) => (await screen.findByRole("heading", { name })).closest("li")!;
+
+  it("shows the first three tags on a card and counts the rest", async () => {
+    open();
+    const card = await cardFor("Fuglen Asakusa");
+    const tags = within(card).getByRole("list", { name: "Tags" });
+
+    expect(within(tags).getByText("Must try")).toBeInTheDocument();
+    expect(within(tags).getByText("Quiet")).toBeInTheDocument();
+    expect(within(tags).queryByText("Great view")).not.toBeInTheDocument();
+    expect(within(tags).getByText("and 1 more")).toBeInTheDocument();
+  });
+
+  it("offers the trip's tags as filters, most used first", async () => {
+    open();
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    const filter = screen.getByRole("group", { name: "Filter by tag" });
+    const names = within(filter).getAllByRole("button").map((b) => b.textContent);
+    expect(names[0]).toBe("Must try2");
+  });
+
+  it("filters the list and the map down to a tag, and back", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByRole("heading", { name: "Japan 2026" });
+    const filter = screen.getByRole("group", { name: "Filter by tag" });
+
+    await user.click(within(filter).getByRole("button", { name: /^Late night/ }));
+
+    expect(screen.getByRole("heading", { name: "Ichiran" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Fuglen Asakusa" })).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("pin").map((p) => p.dataset.title)).toEqual(["Ichiran"]);
+
+    await user.click(within(filter).getByRole("button", { name: /^Late night/ }));
+    expect(screen.getByRole("heading", { name: "Fuglen Asakusa" })).toBeInTheDocument();
+  });
+
+  it("needs both a kind and a tag to hold when both are chosen", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByRole("heading", { name: "Japan 2026" });
+
+    await user.click(screen.getByRole("button", { name: /^Food/ }));
+    await user.click(
+      within(screen.getByRole("group", { name: "Filter by tag" })).getByRole("button", { name: /^Must try/ }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Ichiran" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Fuglen Asakusa" })).not.toBeInTheDocument();
+  });
+
+  it("opens View from a card, not the edit form", async () => {
+    const user = userEvent.setup();
+    open();
+    const card = await cardFor("Fuglen Asakusa");
+
+    expect(within(card).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "View Fuglen Asakusa" }));
+
+    const sheet = screen.getByRole("dialog", { name: "Fuglen Asakusa" });
+    expect(within(sheet).getByText("Great view")).toBeInTheDocument();
+    expect(within(sheet).getByText(/try the honey toast/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Edit place" })).not.toBeInTheDocument();
+  });
+
+  it("edits from inside View, and lands back on it after saving", async () => {
+    const user = userEvent.setup();
+    open();
+    await user.click(within(await cardFor("Ichiran")).getByRole("button", { name: "View Ichiran" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Ichiran" })).getByRole("button", { name: "Edit" }));
+
+    const form = screen.getByRole("dialog", { name: "Edit place" });
+    await user.click(within(form).getByRole("button", { name: "Street food" }));
+    await user.type(within(form).getByLabelText("Tags"), "Tonkotsu{Enter}");
+    await user.click(within(form).getByRole("button", { name: "Remove Late night" }));
+    await user.click(within(form).getByRole("button", { name: "Save" }));
+
+    expect(updatePlace).toHaveBeenCalledWith(
+      3,
+      expect.objectContaining({ tags: ["Must try", "Street food", "Tonkotsu"] }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Ichiran" });
+    expect(within(sheet).getByText("Tonkotsu")).toBeInTheDocument();
+  });
+
+  it("will not add the same tag twice, whatever the spelling", async () => {
+    const user = userEvent.setup();
+    open();
+    await user.click(within(await cardFor("Ichiran")).getByRole("button", { name: "View Ichiran" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Ichiran" })).getByRole("button", { name: "Edit" }));
+
+    const form = screen.getByRole("dialog", { name: "Edit place" });
+    await user.type(within(form).getByLabelText("Tags"), "  late   NIGHT {Enter}");
+
+    expect(within(form).getAllByRole("button", { name: /^Remove/ })).toHaveLength(2);
+  });
+
+  it("lets a viewer open View, but offers no Edit inside it", async () => {
+    const user = userEvent.setup();
+    openAs("viewer");
+    await user.click(within(await cardFor("Ichiran")).getByRole("button", { name: "View Ichiran" }));
+
+    const sheet = screen.getByRole("dialog", { name: "Ichiran" });
+    expect(within(sheet).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: "Ichiran in Google Maps" })).toBeInTheDocument();
   });
 });

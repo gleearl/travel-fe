@@ -4,6 +4,7 @@ import type { Place } from "../lib/api/types";
 import { Avatar } from "../ui/Avatar";
 import { InstagramMark } from "../ui/InstagramMark";
 import { Stamp } from "../ui/Stamp";
+import { TagList } from "../ui/TagChip";
 
 /* An entry in the guide. The name, where it is, the category written as well
    as coloured, and whatever you wrote down about it.
@@ -14,7 +15,7 @@ export function PlaceCard({
   place,
   selected,
   onSelect,
-  onEdit,
+  onView,
   onToggleVisited,
   canEdit,
   ownerId,
@@ -22,7 +23,8 @@ export function PlaceCard({
   place: Place;
   selected: boolean;
   onSelect: () => void;
-  onEdit: () => void;
+  /** Opens the whole place — every tag, the full note, and Edit for those who may. */
+  onView: () => void;
   onToggleVisited: () => void;
   /** False for a viewer, who can read the card and follow its links, no more. */
   canEdit: boolean;
@@ -79,6 +81,14 @@ export function PlaceCard({
 
             {place.address ? (
               <p className="mt-0.5 truncate text-[0.8125rem] text-ink-3">{place.address}</p>
+            ) : null}
+
+            {place.tags.length > 0 ? (
+              /* Three, then "+N": a card is for telling places apart at a
+                 glance, and the rest are one tap away in View. */
+              <div className="mt-1.5">
+                <TagList tags={place.tags} limit={3} />
+              </div>
             ) : null}
 
             {place.notes ? (
@@ -143,15 +153,16 @@ export function PlaceCard({
             <Avatar name={addedBy.name} size={20} title={`Added by ${addedBy.name}`} />
           ) : null}
 
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="stamp min-h-9 rounded-card px-2 text-ink-2 hover:bg-accent-soft hover:text-ink"
-            >
-              Edit
-            </button>
-          ) : null}
+          {/* For everyone, viewers included: reading the whole place is not
+              an edit, and Edit itself lives one step in, inside View. */}
+          <button
+            type="button"
+            onClick={onView}
+            aria-label={`View ${place.name}`}
+            className="stamp min-h-9 rounded-card px-2 text-ink hover:bg-accent-soft"
+          >
+            View
+          </button>
         </div>
       </div>
     </li>

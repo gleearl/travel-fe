@@ -1,5 +1,6 @@
 import { CATEGORY_IDS, type Category } from "../categories";
 import { request, unwrap } from "./http";
+import { toTags } from "./places";
 import type { LibraryPlace } from "./types";
 
 /**
@@ -24,6 +25,7 @@ export async function searchLibrary(query: string): Promise<LibraryPlace[]> {
     category: CATEGORY_IDS.includes(raw.category as Category)
       ? (raw.category as Category)
       : "other",
+    tags: toTags(raw.tags),
     link: String(raw.link ?? ""),
     notes: String(raw.notes ?? ""),
     tripName: String(raw.trip_name ?? ""),

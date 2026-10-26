@@ -99,6 +99,24 @@ describe("trips", () => {
 
     expect((await fetchTrip(1)).places[0].category).toBe("other");
   });
+
+  it("reads tags as a list of strings, and missing tags as none", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        data: {
+          id: 1,
+          places: [
+            { id: 1, lat: "1", lng: "1", tags: ["Street food", 7, "Night market"] },
+            { id: 2, lat: "1", lng: "1" },
+          ],
+        },
+      }),
+    );
+
+    const { places } = await fetchTrip(1);
+    expect(places[0].tags).toEqual(["Street food", "Night market"]);
+    expect(places[1].tags).toEqual([]);
+  });
 });
 
 describe("writes", () => {
@@ -111,6 +129,7 @@ describe("writes", () => {
       lat: 1,
       lng: 1,
       category: "other",
+      tags: [],
       link: "",
       notes: "",
       visited: false,

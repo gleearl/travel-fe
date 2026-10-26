@@ -10,6 +10,7 @@ import { reveal } from "../lib/reveal";
 import { Stamp } from "../ui/Stamp";
 import { CategoryFilter } from "./CategoryFilter";
 import { PlaceCard } from "./PlaceCard";
+import { TagFilter } from "./TagFilter";
 
 /* Everything beside the map: the trip's own line, the filter, and the list.
    One component, rendered inside the phone's sheet or the desktop rail — the
@@ -22,9 +23,12 @@ export function PlacePanel({
   active,
   selectedId,
   onToggleCategory,
+  tags,
+  activeTags,
+  onToggleTag,
   revealKey,
   onSelect,
-  onEdit,
+  onView,
   onToggleVisited,
   onAdd,
   onEditTrip,
@@ -43,8 +47,12 @@ export function PlacePanel({
    *  a pin on the map — which is when the list has to come and find it. */
   revealKey: number;
   onToggleCategory: (category: Category) => void;
+  /** Every tag on this trip, most used first. */
+  tags: { tag: string; count: number }[];
+  activeTags: string[];
+  onToggleTag: (tag: string) => void;
   onSelect: (id: number) => void;
-  onEdit: (place: Place) => void;
+  onView: (place: Place) => void;
   onToggleVisited: (place: Place) => void;
   onAdd: () => void;
   onEditTrip: () => void;
@@ -102,6 +110,11 @@ export function PlacePanel({
       {places.length > 0 ? (
         <div className="mt-3.5">
           <CategoryFilter active={active} counts={counts} onToggle={onToggleCategory} />
+          {tags.length > 0 ? (
+            <div className="mt-2">
+              <TagFilter tags={tags} active={activeTags} onToggle={onToggleTag} />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -125,7 +138,7 @@ export function PlacePanel({
 
       {places.length > 0 && visible.length === 0 ? (
         <p className="py-10 text-center text-[0.9375rem] text-ink-2">
-          Nothing of that kind on this trip yet.
+          Nothing on this trip matches those filters yet.
         </p>
       ) : null}
 
@@ -136,7 +149,10 @@ export function PlacePanel({
             place={place}
             selected={place.id === selectedId}
             onSelect={() => onSelect(place.id)}
-            onEdit={() => onEdit(place)}
+            onView={() => {
+              onSelect(place.id);
+              onView(place);
+            }}
             onToggleVisited={() => onToggleVisited(place)}
             canEdit={canEdit}
             ownerId={trip.owner?.id ?? null}

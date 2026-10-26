@@ -14,6 +14,7 @@ export function toPlace(raw: Record<string, unknown>): Place {
     lat: Number(raw.lat),
     lng: Number(raw.lng),
     category: toCategory(raw.category),
+    tags: toTags(raw.tags),
     link: String(raw.link ?? ""),
     notes: String(raw.notes ?? ""),
     visited: Boolean(raw.visited),
@@ -27,6 +28,11 @@ function toCategory(value: unknown): Category {
   return CATEGORY_IDS.includes(value as Category) ? (value as Category) : "other";
 }
 
+/** Always a list of strings, whatever an older API sends — or doesn't. */
+export function toTags(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((t): t is string => typeof t === "string") : [];
+}
+
 function toBody(input: PlaceInput) {
   return {
     name: input.name,
@@ -34,6 +40,7 @@ function toBody(input: PlaceInput) {
     lat: input.lat,
     lng: input.lng,
     category: input.category,
+    tags: input.tags,
     link: input.link || null,
     notes: input.notes || null,
     visited: input.visited,

@@ -11,6 +11,7 @@ const place = (over: Partial<Place> = {}): Place => ({
   lat: 35.7148231,
   lng: 139.7967412,
   category: "cafe",
+  tags: [],
   link: "",
   notes: "",
   visited: false,

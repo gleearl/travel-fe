@@ -74,6 +74,8 @@ export interface Place {
   lat: number;
   lng: number;
   category: Category;
+  /** Free text, tidied by the API; the form suggests from lib/tags. */
+  tags: string[];
   link: string;
   notes: string;
   visited: boolean;
@@ -98,6 +100,7 @@ export interface PlaceInput {
   lat: number;
   lng: number;
   category: Category;
+  tags: string[];
   link: string;
   notes: string;
   visited: boolean;
@@ -125,6 +128,7 @@ export interface LibraryPlace {
   lat: number;
   lng: number;
   category: Category;
+  tags: string[];
   link: string;
   notes: string;
   /** The trip it was last saved on, to tell two similar names apart. */

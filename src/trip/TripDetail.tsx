@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { CATEGORY_IDS, type Category } from "../lib/categories";
+import { hasTag, sameTag, tagsInUse } from "../lib/tags";
 import { updatePlace } from "../lib/api/places";
 import { fetchTrip } from "../lib/api/trips";
 import type { Place, Trip } from "../lib/api/types";
@@ -10,6 +11,7 @@ import { AppHeader } from "../ui/AppHeader";
 import { TripForm } from "../trips/TripForm";
 import { BottomSheet, type Snap } from "./BottomSheet";
 import { PeopleSheet } from "./PeopleSheet";
+import { PlaceDetail } from "./PlaceDetail";
 import { PlaceForm } from "./PlaceForm";
 import { PlacePanel } from "./PlacePanel";
 import { TripMap, useDefaultPoint } from "./TripMap";
@@ -27,6 +29,10 @@ export function TripDetail() {
   const [failed, setFailed] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [active, setActive] = useState<Set<Category>>(new Set());
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+  /* The place open in View, by id rather than by value: a live update or a
+     save swaps the place object out, and View should show the new one. */
+  const [viewingId, setViewingId] = useState<number | null>(null);
   const [snap, setSnap] = useState<Snap>("half");
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTrip, setEditingTrip] = useState(false);
@@ -92,12 +98,35 @@ export function TripDetail() {
     return tally;
   }, [places]);
 
+  const tags = useMemo(() => tagsInUse(places), [places]);
+
   /* An empty filter means everything. Keeping "all" as the absence of a
-     choice rather than a sixth chip is what stops the two from disagreeing. */
+     choice rather than a sixth chip is what stops the two from disagreeing.
+
+     Within a row, any chip matches — Food or Cafe, Street food or Night market
+     — the same rule for both. Across the two rows, both must hold: "Food" and
+     "Street food" is street food, not every place that is either. */
   const visible = useMemo(
-    () => (active.size === 0 ? places : places.filter((p) => active.has(p.category))),
-    [places, active],
+    () =>
+      places.filter(
+        (p) =>
+          (active.size === 0 || active.has(p.category)) &&
+          (activeTags.length === 0 || activeTags.some((tag) => hasTag(p.tags, tag))),
+      ),
+    [places, active, activeTags],
   );
+
+  /* A tag that no place carries any more — removed from its last place, by
+     you or someone else — would be a filter you can't see and can't turn off,
+     hiding everything. Dropped as soon as it stops being offered. */
+  useEffect(() => {
+    setActiveTags((current) => {
+      const kept = current.filter((tag) => tags.some((t) => sameTag(t.tag, tag)));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [tags]);
+
+  const viewing = places.find((p) => p.id === viewingId) ?? null;
 
   const defaultPoint = useDefaultPoint(trip ?? ({ destinationLat: null, destinationLng: null } as Trip), places);
 
@@ -176,8 +205,15 @@ export function TripDetail() {
           return next;
         })
       }
+      tags={tags}
+      activeTags={activeTags}
+      onToggleTag={(tag) =>
+        setActiveTags((current) =>
+          hasTag(current, tag) ? current.filter((t) => !sameTag(t, tag)) : [...current, tag],
+        )
+      }
       onSelect={setSelectedId}
-      onEdit={(place) => setEditing({ kind: "existing", place })}
+      onView={(place) => setViewingId(place.id)}
       onToggleVisited={toggleVisited}
       onAdd={() => setEditing({ kind: "new", at: defaultPoint })}
       onEditTrip={() => setEditingTrip(true)}
@@ -226,6 +262,19 @@ export function TripDetail() {
         ) : null}
       </div>
 
+      {/* Hidden, not closed, while its place is being edited: closing the form
+          — saved or not — lands back on View, which is where Edit was. */}
+      {viewing && !editing ? (
+        <PlaceDetail
+          place={viewing}
+          canEdit={canEdit}
+          ownerId={trip.owner?.id ?? null}
+          onClose={() => setViewingId(null)}
+          onEdit={() => setEditing({ kind: "existing", place: viewing })}
+          onToggleVisited={() => toggleVisited(viewing)}
+        />
+      ) : null}
+
       {editing ? (
         <PlaceForm
           tripId={trip.id}
@@ -242,6 +291,7 @@ export function TripDetail() {
               current ? { ...current, places: current.places.filter((p) => p.id !== deletedId) } : current,
             );
             setSelectedId((current) => (current === deletedId ? null : current));
+            setViewingId(null);
             setEditing(null);
           }}
         />
