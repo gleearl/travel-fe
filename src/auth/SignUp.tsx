@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate } from "react-router";
+import { Link, Navigate, useLocation } from "react-router";
 import { ApiError } from "../lib/api/http";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
@@ -8,11 +8,14 @@ import { useAuth } from "./useAuth";
 
 export function SignUp() {
   const { user, signUp } = useAuth();
+  const location = useLocation();
   const [form, setForm] = useState({ name: "", email: "", password: "", passwordConfirmation: "" });
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  /* Back to where they were sent from — a shared trip they want to join,
+     say — or the trips list when they came here on their own. */
+  if (user) return <Navigate to={(location.state as { from?: string })?.from ?? "/"} replace />;
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -36,7 +39,7 @@ export function SignUp() {
       footer={
         <>
           Already have one?{" "}
-          <Link to="/sign-in" className="text-ink underline underline-offset-4">
+          <Link to="/sign-in" state={location.state} className="text-ink underline underline-offset-4">
             Sign in
           </Link>
         </>

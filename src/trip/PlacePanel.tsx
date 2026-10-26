@@ -41,6 +41,7 @@ export function PlacePanel({
   onEditTrip,
   role,
   onShowPeople,
+  onShare,
 }: {
   trip: Trip;
   /** Every place on the trip, for the counts. */
@@ -73,6 +74,8 @@ export function PlacePanel({
   /** What this account may do here. The only thing gating any control below. */
   role: TripRole;
   onShowPeople: () => void;
+  /** The share link — the owner's alone, like the guest list. */
+  onShare: () => void;
 }) {
   const seen = places.filter((p) => p.visited).length;
   const canEdit = role !== "viewer";
@@ -89,8 +92,10 @@ export function PlacePanel({
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      {/* Wraps: with Share, Edit and Add place beside it a trip name on a phone
+          would be cut to a word, so the buttons drop below it instead. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-48">
           <h1 className="truncate font-display text-[1.5rem] leading-tight text-ink">{trip.name}</h1>
           {/* No separator characters: these wrap onto a second line on a
               narrow phone, and a middot left dangling at the end of the first
@@ -108,6 +113,11 @@ export function PlacePanel({
 
         <div className="flex shrink-0 items-center gap-1.5">
           <AvatarStack owner={trip.owner} collaborators={trip.collaborators} onClick={onShowPeople} />
+          {role === "owner" ? (
+            <Button size="sm" onClick={onShare}>
+              Share
+            </Button>
+          ) : null}
           {canEdit ? (
             <>
               <Button size="sm" onClick={onEditTrip}>

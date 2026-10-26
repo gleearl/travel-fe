@@ -49,7 +49,8 @@ export function TripMap({
   onDropPin,
   bottomPadding,
 }: {
-  trip: Trip;
+  /** Only where it is, for the opening view — a shared trip will do as well as one of your own. */
+  trip: Pick<Trip, "destinationLat" | "destinationLng">;
   /** Already filtered — the map draws what it is given. */
   places: Place[];
   selectedId: number | null;
@@ -277,7 +278,7 @@ function applyPinStyle(element: HTMLElement, place: Place, selected: boolean): v
 }
 
 /** The centre a new pin should default to when there is nothing to fit. */
-export function useDefaultPoint(trip: Trip, places: Place[]) {
+export function useDefaultPoint(trip: Pick<Trip, "destinationLat" | "destinationLng">, places: Place[]) {
   return useMemo(() => {
     if (places.length > 0) {
       return {

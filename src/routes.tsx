@@ -15,6 +15,11 @@ const TripDetail = lazy(() =>
   import("./trip/TripDetail").then((module) => ({ default: module.TripDetail })),
 );
 
+/* A trip opened from its share link — the map again, so split off the same way. */
+const SharedTrip = lazy(() =>
+  import("./shared/SharedTrip").then((module) => ({ default: module.SharedTrip })),
+);
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -42,6 +47,16 @@ export function AppRoutes() {
               <TripDetail />
             </Suspense>
           </RequireAuth>
+        }
+      />
+
+      {/* Open to anyone holding the link: no RequireAuth. */}
+      <Route
+        path="/s/:token"
+        element={
+          <Suspense fallback={<Unfolding />}>
+            <SharedTrip />
+          </Suspense>
         }
       />
 

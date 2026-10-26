@@ -75,7 +75,8 @@ export function SignIn() {
       footer={
         <>
           No account yet?{" "}
-          <Link to="/sign-up" className="text-ink underline underline-offset-4">
+          {/* Carries on where they were headed, whichever form they finish on. */}
+          <Link to="/sign-up" state={location.state} className="text-ink underline underline-offset-4">
             Make one
           </Link>
         </>

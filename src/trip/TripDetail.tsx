@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { CATEGORY_IDS, type Category } from "../lib/categories";
-import { hasTag, sameTag, tagsInUse } from "../lib/tags";
 import { deletePlace, updatePlace } from "../lib/api/places";
 import { applyChanges, type BulkChanges } from "../lib/bulk";
 import { fetchTrip } from "../lib/api/trips";
@@ -16,7 +14,9 @@ import { PeopleSheet } from "./PeopleSheet";
 import { PlaceDetail } from "./PlaceDetail";
 import { PlaceForm } from "./PlaceForm";
 import { PlacePanel } from "./PlacePanel";
+import { ShareSheet } from "./ShareSheet";
 import { TripMap, useDefaultPoint } from "./TripMap";
+import { usePlaceFilters } from "./usePlaceFilters";
 
 /** What the place form is currently for: nothing, a new place, or an old one. */
 type Editing = { kind: "new"; at: { lat: number; lng: number } } | { kind: "existing"; place: Place } | null;
@@ -30,8 +30,6 @@ export function TripDetail() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [failed, setFailed] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [active, setActive] = useState<Set<Category>>(new Set());
-  const [activeTags, setActiveTags] = useState<string[]>([]);
   /* The place open in View, by id rather than by value: a live update or a
      save swaps the place object out, and View should show the new one. */
   const [viewingId, setViewingId] = useState<number | null>(null);
@@ -43,6 +41,7 @@ export function TripDetail() {
   const [editing, setEditing] = useState<Editing>(null);
   const [editingTrip, setEditingTrip] = useState(false);
   const [showingPeople, setShowingPeople] = useState(false);
+  const [sharing, setSharing] = useState(false);
   /* Ticks on every selection made from the map, so the list scrolls to the
      card even when the same pin is tapped twice. */
   const [revealKey, setRevealKey] = useState(0);
@@ -98,39 +97,7 @@ export function TripDetail() {
      read as something failing to load. */
   const canEdit = trip !== null && trip.role !== "viewer";
 
-  const counts = useMemo(() => {
-    const tally = Object.fromEntries(CATEGORY_IDS.map((c) => [c, 0])) as Record<Category, number>;
-    for (const place of places) tally[place.category] += 1;
-    return tally;
-  }, [places]);
-
-  const tags = useMemo(() => tagsInUse(places), [places]);
-
-  /* An empty filter means everything. Keeping "all" as the absence of a
-     choice rather than a sixth chip is what stops the two from disagreeing.
-
-     Within a row, any chip matches — Food or Cafe, Street food or Night market
-     — the same rule for both. Across the two rows, both must hold: "Food" and
-     "Street food" is street food, not every place that is either. */
-  const visible = useMemo(
-    () =>
-      places.filter(
-        (p) =>
-          (active.size === 0 || active.has(p.category)) &&
-          (activeTags.length === 0 || activeTags.some((tag) => hasTag(p.tags, tag))),
-      ),
-    [places, active, activeTags],
-  );
-
-  /* A tag that no place carries any more — removed from its last place, by
-     you or someone else — would be a filter you can't see and can't turn off,
-     hiding everything. Dropped as soon as it stops being offered. */
-  useEffect(() => {
-    setActiveTags((current) => {
-      const kept = current.filter((tag) => tags.some((t) => sameTag(t.tag, tag)));
-      return kept.length === current.length ? current : kept;
-    });
-  }, [tags]);
+  const { counts, tags, active, activeTags, visible, toggleCategory, toggleTag } = usePlaceFilters(places);
 
   const viewing = places.find((p) => p.id === viewingId) ?? null;
 
@@ -152,7 +119,7 @@ export function TripDetail() {
     setBulkEditing(false);
   }
 
-  const defaultPoint = useDefaultPoint(trip ?? ({ destinationLat: null, destinationLng: null } as Trip), places);
+  const defaultPoint = useDefaultPoint(trip ?? { destinationLat: null, destinationLng: null }, places);
 
   /* Selecting from the map brings the sheet down to where the card is
      readable and the pin is still visible; selecting from the list leaves the
@@ -261,20 +228,10 @@ export function TripDetail() {
       active={active}
       selectedId={selectedId}
       revealKey={revealKey}
-      onToggleCategory={(category) =>
-        setActive((current) => {
-          const next = new Set(current);
-          next.has(category) ? next.delete(category) : next.add(category);
-          return next;
-        })
-      }
+      onToggleCategory={toggleCategory}
       tags={tags}
       activeTags={activeTags}
-      onToggleTag={(tag) =>
-        setActiveTags((current) =>
-          hasTag(current, tag) ? current.filter((t) => !sameTag(t, tag)) : [...current, tag],
-        )
-      }
+      onToggleTag={toggleTag}
       onSelect={setSelectedId}
       onView={(place) => setViewingId(place.id)}
       choosing={choosing}
@@ -288,6 +245,7 @@ export function TripDetail() {
       onEditTrip={() => setEditingTrip(true)}
       role={trip.role}
       onShowPeople={() => setShowingPeople(true)}
+      onShare={() => setSharing(true)}
     />
   );
 
@@ -369,6 +327,8 @@ export function TripDetail() {
       {bulkEditing && chosenPlaces.length > 0 ? (
         <BulkEditSheet places={chosenPlaces} onClose={() => setBulkEditing(false)} onSave={bulkSave} />
       ) : null}
+
+      {sharing ? <ShareSheet tripId={trip.id} onClose={() => setSharing(false)} /> : null}
 
       {showingPeople ? (
         <PeopleSheet
