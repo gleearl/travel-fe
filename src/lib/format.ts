@@ -61,3 +61,22 @@ export function initials(name: string): string {
 
   return (first + last).toUpperCase();
 }
+
+/** "Oct 26, 2026" from an ISO timestamp — for when something happened, not a trip's dates. */
+export function formatDay(iso: string | null): string {
+  const date = iso ? new Date(iso) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+/** What to call a passkey made on this device, until the person says otherwise. */
+export function deviceName(userAgent: string): string {
+  if (/iPhone/.test(userAgent)) return "iPhone";
+  if (/iPad/.test(userAgent)) return "iPad";
+  if (/Android/.test(userAgent)) return "Android phone";
+  if (/Macintosh|Mac OS X/.test(userAgent)) return "Mac";
+  if (/Windows/.test(userAgent)) return "Windows PC";
+  if (/CrOS/.test(userAgent)) return "Chromebook";
+  if (/Linux/.test(userAgent)) return "Linux computer";
+  return "This device";
+}

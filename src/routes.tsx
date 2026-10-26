@@ -6,6 +6,7 @@ import { ResetPassword } from "./auth/ResetPassword";
 import { SignIn } from "./auth/SignIn";
 import { SignUp } from "./auth/SignUp";
 import { TripsList } from "./trips/TripsList";
+import { Account } from "./account/Account";
 
 /* Split off on purpose: the map library is by far the heaviest thing this app
    depends on, and the trips list has no map on it. Signing in and looking at
@@ -40,6 +41,15 @@ export function AppRoutes() {
             <Suspense fallback={<Unfolding />}>
               <TripDetail />
             </Suspense>
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/account"
+        element={
+          <RequireAuth>
+            <Account />
           </RequireAuth>
         }
       />

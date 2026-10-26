@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import * as api from "../lib/api/auth";
+import * as passkeys from "../lib/api/passkeys";
 import { getToken, SESSION_ENDED } from "../lib/api/http";
 import type { User } from "../lib/api/types";
 
@@ -9,6 +10,8 @@ interface AuthValue {
   /** "checking" until the stored token has been tried once. */
   status: "checking" | "ready";
   signIn: (email: string, password: string) => Promise<void>;
+  /** With `autofill`, waits for a passkey picked from the email field's suggestions. */
+  signInWithPasskey: (options?: { autofill?: boolean }) => Promise<void>;
   signUp: (input: {
     name: string;
     email: string;
@@ -59,6 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await api.login(email, password));
   }, []);
 
+  const signInWithPasskey = useCallback(async (options?: { autofill?: boolean }) => {
+    setUser(await passkeys.signInWithPasskey(options));
+  }, []);
+
   const signUp = useCallback(async (input: Parameters<typeof api.register>[0]) => {
     setUser(await api.register(input));
   }, []);
@@ -69,8 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthValue>(
-    () => ({ user, status, signIn, signUp, signOut }),
-    [user, status, signIn, signUp, signOut],
+    () => ({ user, status, signIn, signInWithPasskey, signUp, signOut }),
+    [user, status, signIn, signInWithPasskey, signUp, signOut],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

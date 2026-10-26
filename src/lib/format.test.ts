@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countLabel, formatDateRange, initials, parseDate } from "./format";
+import { countLabel, deviceName, formatDateRange, formatDay, initials, parseDate } from "./format";
 
 describe("dates", () => {
   it("reads an API date as a local day, not as UTC midnight", () => {
@@ -66,5 +66,20 @@ describe("initials", () => {
        failure, and "?" reads as a person we know nothing about. */
     expect(initials("")).toBe("?");
     expect(initials("   ")).toBe("?");
+  });
+});
+
+describe("passkey details", () => {
+  it("writes a timestamp as a day", () => {
+    expect(formatDay("2026-10-26T09:00:00Z")).toBe("Oct 26, 2026");
+    expect(formatDay(null)).toBe("");
+  });
+
+  it("names the device a passkey is being made on", () => {
+    expect(deviceName("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe("iPhone");
+    expect(deviceName("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)")).toBe("Mac");
+    expect(deviceName("Mozilla/5.0 (Linux; Android 15; Pixel 9)")).toBe("Android phone");
+    expect(deviceName("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("Windows PC");
+    expect(deviceName("curl/8")).toBe("This device");
   });
 });

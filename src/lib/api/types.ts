@@ -134,3 +134,11 @@ export interface LibraryPlace {
   /** The trip it was last saved on, to tell two similar names apart. */
   tripName: string;
 }
+
+/** A device this account can sign in with instead of a password. */
+export interface Passkey {
+  id: number;
+  name: string;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+}

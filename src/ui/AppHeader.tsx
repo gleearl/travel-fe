@@ -27,7 +27,15 @@ export function AppHeader({ back }: { back?: { to: string; label: string } }) {
       )}
 
       <div className="flex items-center gap-1">
-        <span className="hidden text-[0.8125rem] text-ink-3 sm:inline">{user?.name}</span>
+        {/* The way to the account page, which is where passkeys live. Still
+            there on a phone, as "Account", where the name would not fit. */}
+        <Link
+          to="/account"
+          className="inline-flex min-h-11 items-center rounded-card px-2.5 text-[0.8125rem] text-ink-2 hover:bg-accent-soft hover:text-ink"
+        >
+          <span className="hidden sm:inline">{user?.name}</span>
+          <span className="stamp sm:hidden">Account</span>
+        </Link>
         <button
           type="button"
           onClick={() => void signOut()}
