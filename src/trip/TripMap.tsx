@@ -17,6 +17,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 maplibregl.setWorkerUrl(workerUrl);
 import { WORLD_VIEW } from "../config";
 import { categoryOf } from "../lib/categories";
+import { useKinds } from "../lib/useKinds";
 import type { Place, Trip } from "../lib/api/types";
 
 /* The map.
@@ -141,6 +142,8 @@ export function TripMap({
   }, []);
 
   /* ── The pins ─────────────────────────────────────────────────────────── */
+  const { kindOf } = useKinds();
+
   useEffect(() => {
     const current = map.current;
     if (!current) return;
@@ -162,11 +165,11 @@ export function TripMap({
         /* Restyled in place. The pin MapLibre was handed is the pin it keeps
            writing positions to, and swapping the node out from under it is how
            pins come loose from their coordinates. */
-        syncPin(existing, place, place.id === selectedId);
+        syncPin(existing, place, place.id === selectedId, kindOf(place.category).color);
         continue;
       }
 
-      const element = pinElement(place, place.id === selectedId);
+      const element = pinElement(place, place.id === selectedId, kindOf(place.category).color);
       element.addEventListener("click", (event) => {
         /* Otherwise the map takes this as a click on itself and the press
            begins a drag of the whole world. */
@@ -181,7 +184,7 @@ export function TripMap({
           .addTo(current),
       );
     }
-  }, [places, selectedId]);
+  }, [places, selectedId, kindOf]);
 
   /* ── Keeping every pin in view ────────────────────────────────────────── */
   const fitted = useRef("");
@@ -216,7 +219,11 @@ export function TripMap({
 /* A circle in the category's colour with a paper ring — not a teardrop pin,
    which belongs to a different map. Visited places go hollow: still there, no
    longer something to do. */
-export function pinElement(place: Place, selected: boolean): HTMLElement {
+export function pinElement(
+  place: Place,
+  selected: boolean,
+  colour = categoryOf(place.category).color,
+): HTMLElement {
   const element = document.createElement("button");
   element.type = "button";
 
@@ -227,7 +234,7 @@ export function pinElement(place: Place, selected: boolean): HTMLElement {
   element.style.cursor = "pointer";
   element.style.transition = "width .18s var(--ease-settle), height .18s var(--ease-settle)";
 
-  applyPinStyle(element, place, selected);
+  applyPinStyle(element, place, selected, colour);
 
   return element;
 }
@@ -242,8 +249,13 @@ export function pinElement(place: Place, selected: boolean): HTMLElement {
  * on writing transforms to something left in normal flow — so the pin drifts
  * off its coordinates, and further at every zoom.
  */
-export function syncPin(marker: MapLibreMarker, place: Place, selected: boolean): void {
-  applyPinStyle(marker.getElement(), place, selected);
+export function syncPin(
+  marker: MapLibreMarker,
+  place: Place,
+  selected: boolean,
+  colour = categoryOf(place.category).color,
+): void {
+  applyPinStyle(marker.getElement(), place, selected, colour);
   marker.setLngLat([place.lng, place.lat]);
 }
 
@@ -251,8 +263,7 @@ export function syncPin(marker: MapLibreMarker, place: Place, selected: boolean)
    position in the transform on this same style object, and assigning cssText
    would wipe it — dropping every pin onto the map's top left corner until the
    next time the camera moved. */
-function applyPinStyle(element: HTMLElement, place: Place, selected: boolean): void {
-  const colour = categoryOf(place.category).color;
+function applyPinStyle(element: HTMLElement, place: Place, selected: boolean, colour: string): void {
   const size = selected ? 26 : 18;
 
   element.title = place.name;

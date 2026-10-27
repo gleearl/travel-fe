@@ -63,8 +63,14 @@ describe("places you have saved before", () => {
     expect(url).toContain("q=100%25%20chocolate%20%26%20co");
   });
 
-  it("falls back to 'other' rather than a chip with no colour", async () => {
-    fetchMock.mockResolvedValueOnce(json({ data: [{ ...RAW, category: "nightclub" }] }));
+  it("keeps a kind of the trip it came from, for the form to judge", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: [{ ...RAW, category: "k-karaoke1" }] }));
+
+    expect((await searchLibrary("fuglen"))[0].category).toBe("k-karaoke1");
+  });
+
+  it("reads a missing kind as Other", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: [{ ...RAW, category: null }] }));
 
     expect((await searchLibrary("fuglen"))[0].category).toBe("other");
   });

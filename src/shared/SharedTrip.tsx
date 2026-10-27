@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../lib/api/http";
+import { withTripKinds } from "../lib/categories";
+import { KindsProvider } from "../lib/useKinds";
 import { copySharedTrip, fetchSharedTrip, joinSharedTrip, type SharedTrip as Shared } from "../lib/api/sharing";
 import { countLabel, formatDateRange } from "../lib/format";
 import { DESKTOP, useMediaQuery } from "../lib/useMediaQuery";
@@ -41,7 +43,8 @@ export function SharedTrip() {
   const [error, setError] = useState<string | null>(null);
 
   const places = trip?.places ?? [];
-  const { counts, tags, active, activeTags, visible, toggleCategory, toggleTag } = usePlaceFilters(places);
+  const kinds = useMemo(() => withTripKinds(trip?.kinds ?? []), [trip?.kinds]);
+  const { counts, tags, active, activeTags, visible, toggleCategory, toggleTag } = usePlaceFilters(places, kinds);
 
   /* Asked again once the account is known, so "your role" reflects whoever is
      now signed in rather than the stranger who first opened the link. */
@@ -180,49 +183,51 @@ export function SharedTrip() {
   );
 
   return (
-    <div className="relative z-10 flex h-dvh flex-col overflow-hidden">
-      {header}
+    <KindsProvider kinds={kinds}>
+      <div className="relative z-10 flex h-dvh flex-col overflow-hidden">
+        {header}
 
-      <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-[380px_1fr]">
-        {desktop ? (
-          <aside className="hidden min-h-0 overflow-y-auto border-r border-rule bg-paper px-5 py-5 lg:block">
-            {panel}
-          </aside>
-        ) : null}
+        <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-[380px_1fr]">
+          {desktop ? (
+            <aside className="hidden min-h-0 overflow-y-auto border-r border-rule bg-paper px-5 py-5 lg:block">
+              {panel}
+            </aside>
+          ) : null}
 
-        <div className="absolute inset-0 z-0 lg:relative">
-          <TripMap
-            trip={trip}
-            places={visible}
-            selectedId={selectedId}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setSnap((current) => (current === "full" ? "half" : current));
-            }}
-            // Reading only: there is nothing to drop a pin onto.
-            onDropPin={() => undefined}
-            bottomPadding={desktop ? 72 : Math.round(window.innerHeight * 0.45)}
-          />
+          <div className="absolute inset-0 z-0 lg:relative">
+            <TripMap
+              trip={trip}
+              places={visible}
+              selectedId={selectedId}
+              onSelect={(id) => {
+                setSelectedId(id);
+                setSnap((current) => (current === "full" ? "half" : current));
+              }}
+              // Reading only: there is nothing to drop a pin onto.
+              onDropPin={() => undefined}
+              bottomPadding={desktop ? 72 : Math.round(window.innerHeight * 0.45)}
+            />
+          </div>
+
+          {!desktop ? (
+            <BottomSheet label="Places on this trip" snap={snap} onSnapChange={setSnap}>
+              {panel}
+            </BottomSheet>
+          ) : null}
         </div>
 
-        {!desktop ? (
-          <BottomSheet label="Places on this trip" snap={snap} onSnapChange={setSnap}>
-            {panel}
-          </BottomSheet>
+        {viewing ? (
+          <PlaceDetail
+            place={viewing}
+            canEdit={false}
+            ownerId={trip.owner?.id ?? null}
+            onClose={() => setViewingId(null)}
+            onEdit={() => undefined}
+            onToggleVisited={() => undefined}
+          />
         ) : null}
       </div>
-
-      {viewing ? (
-        <PlaceDetail
-          place={viewing}
-          canEdit={false}
-          ownerId={trip.owner?.id ?? null}
-          onClose={() => setViewingId(null)}
-          onEdit={() => undefined}
-          onToggleVisited={() => undefined}
-        />
-      ) : null}
-    </div>
+    </KindsProvider>
   );
 }
 

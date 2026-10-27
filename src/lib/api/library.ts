@@ -1,6 +1,5 @@
-import { CATEGORY_IDS, type Category } from "../categories";
 import { request, unwrap } from "./http";
-import { toTags } from "./places";
+import { toCategory, toTags } from "./places";
 import type { LibraryPlace } from "./types";
 
 /**
@@ -22,9 +21,9 @@ export async function searchLibrary(query: string): Promise<LibraryPlace[]> {
     // Sent as strings so the decimal survives the trip; the form wants numbers.
     lat: Number(raw.lat),
     lng: Number(raw.lng),
-    category: CATEGORY_IDS.includes(raw.category as Category)
-      ? (raw.category as Category)
-      : "other",
+    /* Possibly a kind of the trip it came from. The form keeps it only if
+       the trip it is going onto has it too. */
+    category: toCategory(raw.category),
     tags: toTags(raw.tags),
     link: String(raw.link ?? ""),
     notes: String(raw.notes ?? ""),

@@ -51,6 +51,7 @@ describe("trips", () => {
       role: "owner",
       owner: null,
       collaborators: [],
+      kinds: [],
       places: [],
     });
   });
@@ -98,12 +99,21 @@ describe("trips", () => {
     expect((await fetchTrip(1)).places[0].category).toBe("club");
   });
 
-  it("falls back to 'other' rather than a pin with no colour", async () => {
+  it("reads the trip's own kinds, and keeps a place filed under one", async () => {
     fetchMock.mockResolvedValueOnce(
-      json({ data: { id: 1, places: [{ id: 9, lat: "1", lng: "1", category: "nightclub" }] } }),
+      json({
+        data: {
+          id: 1,
+          kinds: [{ id: "k-karaoke1", label: "Karaoke", color: "#0f766e" }],
+          places: [{ id: 9, lat: "1", lng: "1", category: "k-karaoke1" }],
+        },
+      }),
     );
 
-    expect((await fetchTrip(1)).places[0].category).toBe("other");
+    const trip = await fetchTrip(1);
+
+    expect(trip.kinds).toEqual([{ id: "k-karaoke1", label: "Karaoke", color: "#0f766e" }]);
+    expect(trip.places[0].category).toBe("k-karaoke1");
   });
 
   it("reads tags as a list of strings, and missing tags as none", async () => {

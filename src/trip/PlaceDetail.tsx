@@ -1,4 +1,4 @@
-import { categoryOf } from "../lib/categories";
+import { useKinds } from "../lib/useKinds";
 import { googleMapsUrl } from "../lib/maps";
 import type { Place } from "../lib/api/types";
 import { Avatar } from "../ui/Avatar";
@@ -27,7 +27,7 @@ export function PlaceDetail({
   onEdit: () => void;
   onToggleVisited: () => void;
 }) {
-  const category = categoryOf(place.category);
+  const category = useKinds().kindOf(place.category);
   const addedBy = place.addedBy && place.addedBy.id !== ownerId ? place.addedBy : null;
 
   return (

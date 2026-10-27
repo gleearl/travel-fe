@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { deletePlace, updatePlace } from "../lib/api/places";
 import { applyChanges, type BulkChanges } from "../lib/bulk";
+import { withTripKinds, type Kind } from "../lib/categories";
+import { KindsProvider } from "../lib/useKinds";
 import { fetchTrip } from "../lib/api/trips";
 import type { Place, Trip } from "../lib/api/types";
 import { useChanged, useLiveUpdates } from "../live/useLiveUpdates";
@@ -97,7 +99,9 @@ export function TripDetail() {
      read as something failing to load. */
   const canEdit = trip !== null && trip.role !== "viewer";
 
-  const { counts, tags, active, activeTags, visible, toggleCategory, toggleTag } = usePlaceFilters(places);
+  const kinds = useMemo(() => withTripKinds(trip?.kinds ?? []), [trip?.kinds]);
+
+  const { counts, tags, active, activeTags, visible, toggleCategory, toggleTag } = usePlaceFilters(places, kinds);
 
   const viewing = places.find((p) => p.id === viewingId) ?? null;
 
@@ -138,6 +142,34 @@ export function TripDetail() {
             places: current.places.some((p) => p.id === saved.id)
               ? current.places.map((p) => (p.id === saved.id ? saved : p))
               : [...current.places, saved],
+          }
+        : current,
+    );
+  }, []);
+
+  /* A kind made or changed in the place form, put into the trip we have so it
+     is a chip straight away — the live update that follows agrees with it. */
+  const saveKind = useCallback((kind: Kind) => {
+    setTrip((current) =>
+      current
+        ? {
+            ...current,
+            kinds: current.kinds.some((k) => k.id === kind.id)
+              ? current.kinds.map((k) => (k.id === kind.id ? kind : k))
+              : [...current.kinds, kind],
+          }
+        : current,
+    );
+  }, []);
+
+  /* And one removed: its places go back to Other, as they have on the server. */
+  const removeKind = useCallback((id: string) => {
+    setTrip((current) =>
+      current
+        ? {
+            ...current,
+            kinds: current.kinds.filter((k) => k.id !== id),
+            places: current.places.map((p) => (p.category === id ? { ...p, category: "other" } : p)),
           }
         : current,
     );
@@ -250,111 +282,115 @@ export function TripDetail() {
   );
 
   return (
-    <div className="relative z-10 flex h-dvh flex-col overflow-hidden">
-      <AppHeader back={{ to: "/", label: "Trips" }} />
+    <KindsProvider kinds={kinds}>
+      <div className="relative z-10 flex h-dvh flex-col overflow-hidden">
+        <AppHeader back={{ to: "/", label: "Trips" }} />
 
-      <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-[380px_1fr]">
-        {/* The rail: the sheet's content, stood on its side, from lg up. */}
-        {desktop ? (
-          <aside className="hidden min-h-0 overflow-y-auto border-r border-rule bg-paper px-5 py-5 lg:block">
-            {panel}
-          </aside>
-        ) : null}
+        <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-[380px_1fr]">
+          {/* The rail: the sheet's content, stood on its side, from lg up. */}
+          {desktop ? (
+            <aside className="hidden min-h-0 overflow-y-auto border-r border-rule bg-paper px-5 py-5 lg:block">
+              {panel}
+            </aside>
+          ) : null}
 
-        {/* z-0 is load-bearing: it makes this a stacking context of its own.
-            Without it Leaflet's internal panes (z-index 400 and up) are
-            compared against the sheet in the parent's context and paint over
-            it — the map covers the list entirely, and only once tiles have
-            loaded, which makes it look like a loading bug. */}
-        <div className="absolute inset-0 z-0 lg:relative">
-          <TripMap
-            trip={trip}
-            places={visible}
-            selectedId={selectedId}
-            onSelect={selectFromMap}
-            /* A long press on open map means "a place here", which a viewer
-               cannot make — opening the form for them would be offering a save
-               button that can only fail. */
-            onDropPin={(at) => canEdit && setEditing({ kind: "new", at })}
-            /* The rail sits beside the map, so it hides nothing; the sheet
-               sits over it and hides half. */
-            bottomPadding={desktop ? 72 : Math.round(window.innerHeight * 0.45)}
-          />
+          {/* z-0 is load-bearing: it makes this a stacking context of its own.
+              Without it Leaflet's internal panes (z-index 400 and up) are
+              compared against the sheet in the parent's context and paint over
+              it — the map covers the list entirely, and only once tiles have
+              loaded, which makes it look like a loading bug. */}
+          <div className="absolute inset-0 z-0 lg:relative">
+            <TripMap
+              trip={trip}
+              places={visible}
+              selectedId={selectedId}
+              onSelect={selectFromMap}
+              /* A long press on open map means "a place here", which a viewer
+                 cannot make — opening the form for them would be offering a save
+                 button that can only fail. */
+              onDropPin={(at) => canEdit && setEditing({ kind: "new", at })}
+              /* The rail sits beside the map, so it hides nothing; the sheet
+                 sits over it and hides half. */
+              bottomPadding={desktop ? 72 : Math.round(window.innerHeight * 0.45)}
+            />
+          </div>
+
+          {!desktop ? (
+            <BottomSheet label="Places on this trip" snap={snap} onSnapChange={setSnap}>
+              {panel}
+            </BottomSheet>
+          ) : null}
         </div>
 
-        {!desktop ? (
-          <BottomSheet label="Places on this trip" snap={snap} onSnapChange={setSnap}>
-            {panel}
-          </BottomSheet>
+        {/* Hidden, not closed, while its place is being edited: closing the form
+            — saved or not — lands back on View, which is where Edit was. */}
+        {viewing && !editing ? (
+          <PlaceDetail
+            place={viewing}
+            canEdit={canEdit}
+            ownerId={trip.owner?.id ?? null}
+            onClose={() => setViewingId(null)}
+            onEdit={() => setEditing({ kind: "existing", place: viewing })}
+            onToggleVisited={() => toggleVisited(viewing)}
+          />
+        ) : null}
+
+        {editing ? (
+          <PlaceForm
+            tripId={trip.id}
+            place={editing.kind === "existing" ? editing.place : undefined}
+            startingPoint={editing.kind === "new" ? editing.at : defaultPoint}
+            onClose={() => setEditing(null)}
+            onSaved={(saved) => {
+              replacePlace(saved);
+              setSelectedId(saved.id);
+              setEditing(null);
+            }}
+            onDeleted={(deletedId) => {
+              setTrip((current) =>
+                current ? { ...current, places: current.places.filter((p) => p.id !== deletedId) } : current,
+              );
+              setSelectedId((current) => (current === deletedId ? null : current));
+              setViewingId(null);
+              setEditing(null);
+            }}
+            onKindSaved={saveKind}
+            onKindDeleted={removeKind}
+          />
+        ) : null}
+
+        {bulkEditing && chosenPlaces.length > 0 ? (
+          <BulkEditSheet places={chosenPlaces} onClose={() => setBulkEditing(false)} onSave={bulkSave} />
+        ) : null}
+
+        {sharing ? <ShareSheet tripId={trip.id} onClose={() => setSharing(false)} /> : null}
+
+        {showingPeople ? (
+          <PeopleSheet
+            tripId={trip.id}
+            role={trip.role}
+            onClose={() => setShowingPeople(false)}
+            onLeft={() => navigate("/", { replace: true })}
+          />
+        ) : null}
+
+        {editingTrip ? (
+          <TripForm
+            trip={trip}
+            onClose={() => setEditingTrip(false)}
+            onSaved={(saved) => {
+              // The update call answers without places; keep the ones we have.
+              setTrip((current) => (current ? { ...saved, places: current.places } : saved));
+              setEditingTrip(false);
+            }}
+            /* Both land back on the list — one because the trip has moved to a
+               part of it this screen is not, the other because there is no trip
+               left to be on. `replace` so Back does not return to a dead id. */
+            onArchived={() => navigate("/", { replace: true })}
+            onDeleted={() => navigate("/", { replace: true })}
+          />
         ) : null}
       </div>
-
-      {/* Hidden, not closed, while its place is being edited: closing the form
-          — saved or not — lands back on View, which is where Edit was. */}
-      {viewing && !editing ? (
-        <PlaceDetail
-          place={viewing}
-          canEdit={canEdit}
-          ownerId={trip.owner?.id ?? null}
-          onClose={() => setViewingId(null)}
-          onEdit={() => setEditing({ kind: "existing", place: viewing })}
-          onToggleVisited={() => toggleVisited(viewing)}
-        />
-      ) : null}
-
-      {editing ? (
-        <PlaceForm
-          tripId={trip.id}
-          place={editing.kind === "existing" ? editing.place : undefined}
-          startingPoint={editing.kind === "new" ? editing.at : defaultPoint}
-          onClose={() => setEditing(null)}
-          onSaved={(saved) => {
-            replacePlace(saved);
-            setSelectedId(saved.id);
-            setEditing(null);
-          }}
-          onDeleted={(deletedId) => {
-            setTrip((current) =>
-              current ? { ...current, places: current.places.filter((p) => p.id !== deletedId) } : current,
-            );
-            setSelectedId((current) => (current === deletedId ? null : current));
-            setViewingId(null);
-            setEditing(null);
-          }}
-        />
-      ) : null}
-
-      {bulkEditing && chosenPlaces.length > 0 ? (
-        <BulkEditSheet places={chosenPlaces} onClose={() => setBulkEditing(false)} onSave={bulkSave} />
-      ) : null}
-
-      {sharing ? <ShareSheet tripId={trip.id} onClose={() => setSharing(false)} /> : null}
-
-      {showingPeople ? (
-        <PeopleSheet
-          tripId={trip.id}
-          role={trip.role}
-          onClose={() => setShowingPeople(false)}
-          onLeft={() => navigate("/", { replace: true })}
-        />
-      ) : null}
-
-      {editingTrip ? (
-        <TripForm
-          trip={trip}
-          onClose={() => setEditingTrip(false)}
-          onSaved={(saved) => {
-            // The update call answers without places; keep the ones we have.
-            setTrip((current) => (current ? { ...saved, places: current.places } : saved));
-            setEditingTrip(false);
-          }}
-          /* Both land back on the list — one because the trip has moved to a
-             part of it this screen is not, the other because there is no trip
-             left to be on. `replace` so Back does not return to a dead id. */
-          onArchived={() => navigate("/", { replace: true })}
-          onDeleted={() => navigate("/", { replace: true })}
-        />
-      ) : null}
-    </div>
+    </KindsProvider>
   );
 }

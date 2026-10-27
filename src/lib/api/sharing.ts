@@ -1,4 +1,6 @@
 import { toPerson } from "./people";
+import type { Kind } from "../categories";
+import { toKinds } from "./kinds";
 import { toPlace } from "./places";
 import { request, unwrap } from "./http";
 import type { Person, Place, TripRole } from "./types";
@@ -27,6 +29,8 @@ export interface SharedTrip {
   /** Set when whoever is looking is already on the trip. */
   yourRole: TripRole | null;
   tripId: number | null;
+  /** The trip's own kinds, so its places keep their colours here too. */
+  kinds: Kind[];
   places: Place[];
 }
 
@@ -69,6 +73,7 @@ export async function fetchSharedTrip(token: string): Promise<SharedTrip> {
     shareRole: raw.share_role === "editor" ? "editor" : "viewer",
     yourRole: (raw.your_role as TripRole) ?? null,
     tripId: raw.trip_id == null ? null : Number(raw.trip_id),
+    kinds: toKinds(raw.kinds),
     places: Array.isArray(raw.places) ? (raw.places as Record<string, unknown>[]).map(toPlace) : [],
   };
 }

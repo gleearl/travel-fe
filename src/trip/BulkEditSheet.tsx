@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { CATEGORIES, categoryOf, type Category } from "../lib/categories";
+import type { Category } from "../lib/categories";
+import { useKinds } from "../lib/useKinds";
 import { hasChanges, sharedValues, type BulkChanges } from "../lib/bulk";
 import { hasTag } from "../lib/tags";
 import type { Place } from "../lib/api/types";
 import { countLabel } from "../lib/format";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
+import { KindChip } from "./KindChip";
 import { TagPicker } from "./TagPicker";
 
 /* Several places, edited as one. Each section is either open — every place
@@ -22,6 +24,7 @@ export function BulkEditSheet({
   /** Resolves once every place is saved; rejects with how many were not. */
   onSave: (changes: BulkChanges) => Promise<void>;
 }) {
+  const { kinds, kindOf } = useKinds();
   const shared = useMemo(() => sharedValues(places), [places]);
   const [category, setCategory] = useState<Category | null>(shared.category);
   const [visited, setVisited] = useState<boolean | null>(shared.visited);
@@ -49,7 +52,7 @@ export function BulkEditSheet({
   }
 
   const n = places.length;
-  const kinds = [...new Set(places.map((p) => categoryOf(p.category).label))];
+  const mixed = [...new Set(places.map((p) => kindOf(p.category).label))];
 
   return (
     <Sheet
@@ -76,33 +79,12 @@ export function BulkEditSheet({
         <Section label="Kind">
           {shared.category ? (
             <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.map((c) => {
-                const on = category === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setCategory(c.id)}
-                    className="stamp inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3"
-                    style={
-                      on
-                        ? { background: c.color, borderColor: c.color, color: "var(--color-paper)" }
-                        : { borderColor: "var(--color-rule)", color: "var(--color-ink-2)" }
-                    }
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="h-2 w-2 rounded-pill"
-                      style={{ background: on ? "var(--color-paper)" : c.color }}
-                    />
-                    {c.label}
-                  </button>
-                );
-              })}
+              {kinds.map((c) => (
+                <KindChip key={c.id} kind={c} on={category === c.id} onClick={() => setCategory(c.id)} />
+              ))}
             </div>
           ) : (
-            <Locked reason="Pick places of one kind to change this.">Mixed: {kinds.join(", ")}</Locked>
+            <Locked reason="Pick places of one kind to change this.">Mixed: {mixed.join(", ")}</Locked>
           )}
         </Section>
 

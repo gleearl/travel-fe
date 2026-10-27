@@ -39,6 +39,7 @@ const TRIP: Shared = {
   shareRole: "editor",
   yourRole: null,
   tripId: null,
+  kinds: [],
   places: [
     place({ id: 1, name: "Raohe Night Market", tags: ["Street food"], notes: "pepper buns" }),
     place({ id: 2, name: "Elephant Mountain", category: "sight" }),

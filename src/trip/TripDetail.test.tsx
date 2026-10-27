@@ -37,6 +37,7 @@ const TRIP: Trip = {
   role: "owner",
   owner: { id: 99, name: "Glee Earl" },
   collaborators: [],
+  kinds: [],
   places: [
     place({
       id: 1,
@@ -153,6 +154,16 @@ vi.mock("../lib/api/places", () => ({
   deletePlace: (id: number) => deletePlace(id),
 }));
 
+const createKind = vi.fn();
+const deleteKind = vi.fn();
+
+vi.mock("../lib/api/kinds", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api/kinds")>()),
+  createKind: (tripId: number, input: unknown) => createKind(tripId, input),
+  updateKind: vi.fn(),
+  deleteKind: (tripId: number, id: string) => deleteKind(tripId, id),
+}));
+
 function open() {
   render(
     <MemoryRouter initialEntries={["/trips/7"]}>
@@ -177,6 +188,8 @@ beforeEach(() => {
     members: [],
     invitations: [],
   });
+  createKind.mockReset().mockImplementation((_tripId, input) => Promise.resolve({ id: "k-new", ...input }));
+  deleteKind.mockReset().mockResolvedValue(undefined);
   live.current = { trips: { 7: 100 }, invitations: { count: 0, latest: null } };
 });
 
@@ -961,5 +974,83 @@ describe("acting on several places at once", () => {
     await user.click(within(bar()).getByRole("button", { name: "Select all 1" }));
 
     expect(within(bar()).getByText("1 selected")).toBeInTheDocument();
+  });
+});
+
+describe("a trip's own kinds", () => {
+  const KARAOKE = { id: "k-karaoke1", label: "Karaoke", color: "#0f766e" };
+  const cardFor = async (name: string) => (await screen.findByRole("heading", { name })).closest("li")!;
+
+  it("adds a kind from the place form, in the colour picked, and picks it", async () => {
+    const user = userEvent.setup();
+    open();
+    await openSearch(user);
+    const form = screen.getByRole("dialog", { name: "Add a place" });
+
+    await user.click(within(form).getByRole("button", { name: "New kind" }));
+    await user.type(within(form).getByLabelText("Name"), "Karaoke");
+    await user.click(within(form).getByRole("radio", { name: "Rose" }));
+    await user.click(within(form).getByRole("button", { name: "Add kind" }));
+
+    expect(createKind).toHaveBeenCalledWith(7, { label: "Karaoke", color: "#be185d" });
+    expect(await within(form).findByRole("button", { name: "Karaoke" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("starts a new kind on a colour the trip's own kinds are not using yet", async () => {
+    const user = userEvent.setup();
+    openAs("owner", { kinds: [KARAOKE] });
+    await openSearch(user);
+    const form = screen.getByRole("dialog", { name: "Add a place" });
+
+    await user.click(within(form).getByRole("button", { name: "New kind" }));
+
+    expect(within(form).getByRole("radio", { name: "Teal" })).toHaveAttribute("aria-checked", "false");
+    expect(within(form).getByRole("radio", { name: "Rose" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("files a place under a new kind without saving the place first", async () => {
+    const user = userEvent.setup();
+    open();
+    await openSearch(user);
+    const form = screen.getByRole("dialog", { name: "Add a place" });
+
+    await user.click(within(form).getByRole("button", { name: "New kind" }));
+    // Enter here means the kind, not the place the form is for.
+    await user.type(within(form).getByLabelText("Name"), "Onsen{Enter}");
+
+    expect(createKind).toHaveBeenCalledWith(7, expect.objectContaining({ label: "Onsen" }));
+    expect(screen.getByRole("dialog", { name: "Add a place" })).toBeInTheDocument();
+  });
+
+  it("filters by a trip's own kind like any other", async () => {
+    const user = userEvent.setup();
+    openAs("owner", {
+      kinds: [KARAOKE],
+      places: [...structuredClone(TRIP).places, place({ id: 4, name: "Big Echo", category: KARAOKE.id })],
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^Karaoke/ }));
+
+    expect(screen.getByRole("heading", { name: "Big Echo" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ichiran" })).not.toBeInTheDocument();
+  });
+
+  it("removes a kind, and its places go back to Other", async () => {
+    const user = userEvent.setup();
+    openAs("owner", {
+      kinds: [KARAOKE],
+      places: [...structuredClone(TRIP).places, place({ id: 4, name: "Big Echo", category: KARAOKE.id })],
+    });
+    await user.click(within(await cardFor("Big Echo")).getByRole("button", { name: "View Big Echo" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Big Echo" })).getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("dialog", { name: "Edit place" });
+
+    await user.click(within(form).getByRole("button", { name: "Change the name or colour of Karaoke" }));
+    await user.click(within(form).getByRole("button", { name: "Remove" }));
+    await user.click(within(form).getByRole("button", { name: "Remove" }));
+
+    expect(deleteKind).toHaveBeenCalledWith(7, KARAOKE.id);
+    expect(within(form).queryByRole("button", { name: "Karaoke" })).not.toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: "Other" })).toHaveAttribute("aria-pressed", "true");
   });
 });

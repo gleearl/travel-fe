@@ -17,6 +17,7 @@ const trip = (over: Partial<Trip> = {}): Trip => ({
   role: "owner",
   owner: { id: 9, name: "Glee Earl" },
   collaborators: [],
+  kinds: [],
   places: [],
   ...over,
 });

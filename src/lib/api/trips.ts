@@ -1,5 +1,6 @@
 import { request, unwrap } from "./http";
 import { toCollaborator, toPerson, toRole } from "./people";
+import { toKinds } from "./kinds";
 import { toPlace } from "./places";
 import type { Trip, TripInput } from "./types";
 
@@ -27,6 +28,7 @@ export function toTrip(raw: Record<string, unknown>): Trip {
     collaborators: Array.isArray(raw.collaborators)
       ? (raw.collaborators as Record<string, unknown>[]).map(toCollaborator)
       : [],
+    kinds: toKinds(raw.kinds),
     places: Array.isArray(raw.places)
       ? (raw.places as Record<string, unknown>[]).map(toPlace)
       : [],

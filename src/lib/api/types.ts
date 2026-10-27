@@ -1,4 +1,4 @@
-import type { Category } from "../categories";
+import type { Category, Kind } from "../categories";
 
 export interface User {
   id: number;
@@ -62,6 +62,8 @@ export interface Trip {
   owner: Person | null;
   /** Everyone else on it, for the avatar stack. */
   collaborators: Collaborator[];
+  /** The kinds this trip added to the built-in ones, in the order they were added. */
+  kinds: Kind[];
   /** Only on the detail call; the list never carries them. */
   places: Place[];
 }
