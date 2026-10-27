@@ -1,4 +1,3 @@
-import { CATEGORY_IDS, type Category } from "../categories";
 import { toPerson } from "./people";
 import { request, unwrap } from "./http";
 import type { Place, PlaceInput } from "./types";
@@ -23,9 +22,10 @@ export function toPlace(raw: Record<string, unknown>): Place {
   };
 }
 
-/** An unknown category becomes "other" rather than a pin with no colour. */
-function toCategory(value: unknown): Category {
-  return CATEGORY_IDS.includes(value as Category) ? (value as Category) : "other";
+/* Kept as sent, even when it is not a kind the app knows: it may be one of the
+   trip's own. Whatever cannot be found is drawn as Other — see kindIn. */
+export function toCategory(value: unknown): string {
+  return typeof value === "string" && value !== "" ? value : "other";
 }
 
 /** Always a list of strings, whatever an older API sends — or doesn't. */

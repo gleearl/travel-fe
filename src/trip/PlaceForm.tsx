@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { CATEGORIES, categoryOf, type Category } from "../lib/categories";
+import type { Kind } from "../lib/categories";
+import { useKinds } from "../lib/useKinds";
 import { searchPlaces } from "../lib/api/geocode";
 import { searchLibrary } from "../lib/api/library";
 import { resolveMapLink } from "../lib/api/mapLink";
@@ -12,6 +13,7 @@ import { Button } from "../ui/Button";
 import { Field, TextArea } from "../ui/Field";
 import { Sheet } from "../ui/Sheet";
 import { Stamp } from "../ui/Stamp";
+import { KindPicker } from "./KindPicker";
 import { TagPicker } from "./TagPicker";
 
 export function PlaceForm({
@@ -21,6 +23,8 @@ export function PlaceForm({
   onClose,
   onSaved,
   onDeleted,
+  onKindSaved,
+  onKindDeleted,
 }: {
   tripId: number;
   /** Absent when this is a new place. */
@@ -30,7 +34,11 @@ export function PlaceForm({
   onClose: () => void;
   onSaved: (place: Place) => void;
   onDeleted: (id: number) => void;
+  /** A kind added to the trip, or changed, from inside the form. */
+  onKindSaved: (kind: Kind) => void;
+  onKindDeleted: (id: string) => void;
 }) {
+  const { kindOf } = useKinds();
   const [form, setForm] = useState<PlaceInput>(
     place
       ? { ...place }
@@ -101,7 +109,17 @@ export function PlaceForm({
         /* Whatever the search found, merged over what is already typed. The
            geocoder knows a name and a point; a place you saved before knows
            its category, its link and the note you left on it too. */
-        <PlaceSearch onPick={(found) => setForm((f) => ({ ...f, ...found }))} />
+        <PlaceSearch
+          onPick={(found) =>
+            setForm((f) => ({
+              ...f,
+              ...found,
+              /* A place saved on another trip may be of a kind only that trip
+                 has. Here it is Other until someone picks again. */
+              ...(found.category !== undefined ? { category: kindOf(found.category).id } : {}),
+            }))
+          }
+        />
       ) : null}
 
       <form id="place-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
@@ -123,33 +141,16 @@ export function PlaceForm({
         />
 
         <div>
-          <span className="stamp mb-1.5 block text-ink-2">Kind</span>
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((category) => {
-              const on = form.category === category.id;
-              return (
-                <button
-                  key={category.id}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => set("category", category.id as Category)}
-                  className="stamp inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3"
-                  style={
-                    on
-                      ? { background: category.color, borderColor: category.color, color: "var(--color-paper)" }
-                      : { borderColor: "var(--color-rule)", color: "var(--color-ink-2)" }
-                  }
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 rounded-pill"
-                    style={{ background: on ? "var(--color-paper)" : category.color }}
-                  />
-                  {category.label}
-                </button>
-              );
-            })}
-          </div>
+          <KindPicker
+            tripId={tripId}
+            value={form.category}
+            onChange={(category) => set("category", category)}
+            onKindSaved={onKindSaved}
+            onKindDeleted={onKindDeleted}
+          />
+          {error?.fieldError("category") ? (
+            <p className="mt-1.5 text-[0.8125rem] text-danger">{error.fieldError("category")}</p>
+          ) : null}
         </div>
 
         <div>
@@ -244,6 +245,7 @@ const SETTLE_MS = 200;
    different kind of answer from somewhere the map has heard of, and a list that
    blurred them would hide the shortcut inside the long way round. */
 function PlaceSearch({ onPick }: { onPick: (found: Partial<PlaceInput>) => void }) {
+  const { kindOf } = useKinds();
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState<LibraryPlace[]>([]);
   const [hits, setHits] = useState<GeocodeResult[] | null>(null);
@@ -346,8 +348,8 @@ function PlaceSearch({ onPick }: { onPick: (found: Partial<PlaceInput>) => void 
                 >
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-[0.9375rem] text-ink">{place.name}</span>
-                    <Stamp color={categoryOf(place.category).color} className="shrink-0">
-                      {categoryOf(place.category).label}
+                    <Stamp color={kindOf(place.category).color} className="shrink-0">
+                      {kindOf(place.category).label}
                     </Stamp>
                   </span>
                   {/* Which trip it is from, because a name on its own is not

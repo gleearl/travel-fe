@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CATEGORY_IDS, type Category } from "../lib/categories";
+import { kindIn, type Category, type Kind } from "../lib/categories";
 import { hasTag, sameTag, tagsInUse } from "../lib/tags";
 import type { Place } from "../lib/api/types";
 
@@ -8,15 +8,20 @@ import type { Place } from "../lib/api/types";
  * Shared by the trip screen and a trip opened from its share link, so the two
  * can never filter differently.
  */
-export function usePlaceFilters(places: Place[]) {
+export function usePlaceFilters(places: Place[], kinds: readonly Kind[]) {
   const [active, setActive] = useState<Set<Category>>(new Set());
   const [activeTags, setActiveTags] = useState<string[]>([]);
 
+  /* Counted, and filtered below, by the kind a place is drawn as — so one
+     whose kind is not on this trip any more sits under Other, where its pin
+     says it is. */
+  const kindOf = useCallback((place: Place) => kindIn(kinds, place.category).id, [kinds]);
+
   const counts = useMemo(() => {
-    const tally = Object.fromEntries(CATEGORY_IDS.map((c) => [c, 0])) as Record<Category, number>;
-    for (const place of places) tally[place.category] += 1;
+    const tally = Object.fromEntries(kinds.map((k) => [k.id, 0])) as Record<Category, number>;
+    for (const place of places) tally[kindOf(place)] += 1;
     return tally;
-  }, [places]);
+  }, [places, kinds, kindOf]);
 
   const tags = useMemo(() => tagsInUse(places), [places]);
 
@@ -30,10 +35,10 @@ export function usePlaceFilters(places: Place[]) {
     () =>
       places.filter(
         (p) =>
-          (active.size === 0 || active.has(p.category)) &&
+          (active.size === 0 || active.has(kindOf(p))) &&
           (activeTags.length === 0 || activeTags.some((tag) => hasTag(p.tags, tag))),
       ),
-    [places, active, activeTags],
+    [places, active, activeTags, kindOf],
   );
 
   /* A tag that no place carries any more — removed from its last place, by
@@ -45,6 +50,15 @@ export function usePlaceFilters(places: Place[]) {
       return kept.length === current.length ? current : kept;
     });
   }, [tags]);
+
+  /* The same for a kind: one with nothing left under it — removed from the
+     trip, or its last place moved — has no chip to turn it off with. */
+  useEffect(() => {
+    setActive((current) => {
+      const kept = new Set([...current].filter((kind) => (counts[kind] ?? 0) > 0));
+      return kept.size === current.size ? current : kept;
+    });
+  }, [counts]);
 
   const toggleCategory = useCallback((category: Category) => {
     setActive((current) => {

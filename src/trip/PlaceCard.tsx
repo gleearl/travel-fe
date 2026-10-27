@@ -1,4 +1,4 @@
-import { categoryOf } from "../lib/categories";
+import { useKinds } from "../lib/useKinds";
 import { googleMapsUrl } from "../lib/maps";
 import type { Place } from "../lib/api/types";
 import { Avatar } from "../ui/Avatar";
@@ -34,7 +34,7 @@ export function PlaceCard({
   chosen?: boolean;
   onToggleChosen?: () => void;
 }) {
-  const category = categoryOf(place.category);
+  const category = useKinds().kindOf(place.category);
 
   /* Only when somebody other than the trip's owner put it here. On a trip
      you are keeping alone that is never true, so no card carries a face it
