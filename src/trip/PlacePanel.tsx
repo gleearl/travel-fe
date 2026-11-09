@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Category } from "../lib/categories";
 import type { TripRole } from "../lib/api/types";
 import { AvatarStack } from "../ui/Avatar";
@@ -90,37 +90,11 @@ export function PlacePanel({
     if (card instanceof HTMLElement) reveal(card);
   }, [revealKey, selectedId]);
 
-  /* On the desktop rail the trip's own line stays put while the list scrolls
-     under it, so Add place is never a scroll away. It gets a rule beneath it
-     only once something is actually passing under — at rest it should look
-     like the top of the page, not a toolbar. The phone's sheet is its own
-     scroller with its own handle, and none of the lg: classes apply there. */
-  const sentinel = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(false);
-  useEffect(() => {
-    const node = sentinel.current;
-    if (!node || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting));
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <>
-      <div ref={sentinel} aria-hidden="true" className="h-px -mb-px" />
       {/* Wraps: with Share, Edit and Add place beside it a trip name on a phone
-          would be cut to a word, so the buttons drop below it instead.
-          The negative margins and top match the rail's padding: the bar runs
-          edge to edge, and sticks flush to the rail's top edge rather than a
-          padding's width below it, where a sliver of card would show above. */}
-      <div
-        className={[
-          "flex flex-wrap items-start justify-between gap-3",
-          "lg:sticky lg:-top-5 lg:z-10 lg:-mx-5 lg:-mt-5 lg:border-b lg:bg-paper/95 lg:px-5 lg:pt-5 lg:pb-3 lg:backdrop-blur-sm",
-          "lg:transition-[border-color,box-shadow] lg:duration-200",
-          stuck ? "lg:border-rule lg:shadow-card" : "lg:border-transparent",
-        ].join(" ")}
-      >
+          would be cut to a word, so the buttons drop below it instead. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-48">
           <h1 className="truncate font-display text-[1.5rem] leading-tight text-ink">{trip.name}</h1>
           {/* No separator characters: these wrap onto a second line on a
@@ -158,7 +132,7 @@ export function PlacePanel({
       </div>
 
       {places.length > 0 ? (
-        <div className="mt-3.5 lg:mt-2">
+        <div className="mt-3.5">
           <CategoryFilter active={active} counts={counts} onToggle={onToggleCategory} />
           {tags.length > 0 ? (
             <div className="mt-2">
