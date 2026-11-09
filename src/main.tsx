@@ -3,8 +3,11 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { AuthProvider } from "./auth/useAuth";
 import { LiveUpdatesProvider } from "./live/useLiveUpdates";
+import { initTheme } from "./lib/theme";
 import { AppRoutes } from "./routes";
 import "./styles/index.css";
+
+initTheme();
 
 /* The custom domain serves this app from the root, so BASE_URL is "/" and the
    basename is a no-op today. It stays wired up anyway: BASE_URL is whatever

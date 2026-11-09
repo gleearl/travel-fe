@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { contrastOnPaper, KIND_SWATCHES, type Category, type Kind } from "../lib/categories";
+import { contrastOnPaper, KIND_SWATCHES, paintKind, type Category, type Kind } from "../lib/categories";
 import { ApiError } from "../lib/api/http";
 import { createKind, deleteKind, updateKind } from "../lib/api/kinds";
 import { useKinds } from "../lib/useKinds";
@@ -70,7 +70,7 @@ export function KindPicker({
           key={editing === "new" ? "new" : editing.id}
           tripId={tripId}
           kind={editing === "new" ? undefined : editing}
-          taken={kinds.filter((k) => k.custom).map((k) => k.color)}
+          taken={kinds.filter((k) => k.custom).map((k) => k.hex ?? k.color)}
           onCancel={() => setEditing(null)}
           onSaved={(kind) => {
             onKindSaved(kind);
@@ -108,7 +108,7 @@ function KindEditor({
 }) {
   const [label, setLabel] = useState(kind?.label ?? "");
   const [color, setColor] = useState(
-    kind?.color ?? (KIND_SWATCHES.find((s) => !taken.includes(s.color)) ?? KIND_SWATCHES[0]).color,
+    kind?.hex ?? kind?.color ?? (KIND_SWATCHES.find((s) => !taken.includes(s.color)) ?? KIND_SWATCHES[0]).color,
   );
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const colourLabel = useId();
@@ -116,6 +116,8 @@ function KindEditor({
   const [busy, setBusy] = useState(false);
 
   const isSwatch = KIND_SWATCHES.some((s) => s.color === color);
+  /* What it will actually be drawn in, in this theme. */
+  const painted = paintKind(color);
   const contrast = contrastOnPaper(color);
 
   async function save() {
@@ -179,7 +181,7 @@ function KindEditor({
           {KIND_SWATCHES.map((swatch) => (
             <Swatch
               key={swatch.color}
-              color={swatch.color}
+              color={paintKind(swatch.color)}
               name={swatch.name}
               on={color === swatch.color}
               onPick={() => setColor(swatch.color)}
@@ -196,7 +198,7 @@ function KindEditor({
             style={{
               background: isSwatch
                 ? "conic-gradient(#c4231b, #975400, #5f6b0f, #147a3c, #0e6e8c, #1a5fd0, #4338ca, #9b2fae, #be185d, #c4231b)"
-                : color,
+                : painted,
             }}
             title="Your own colour"
           >
@@ -224,13 +226,13 @@ function KindEditor({
       {/* How it will look: the chip, the pin, and the name as a card writes it. */}
       <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-3">
         <span className="stamp text-ink-3">Looks like</span>
-        <KindChip kind={{ label: label.trim(), color }} on />
+        <KindChip kind={{ label: label.trim(), color: painted }} on />
         <span
           aria-hidden="true"
           className="h-[18px] w-[18px] rounded-pill"
-          style={{ background: color, border: "1.5px solid var(--color-paper)", boxShadow: "0 1px 3px rgb(28 26 23 / 0.3)" }}
+          style={{ background: painted, border: "1.5px solid var(--color-paper)", boxShadow: "var(--shadow-pin)" }}
         />
-        <span className="stamp" style={{ color }}>
+        <span className="stamp" style={{ color: painted }}>
           {label.trim() || "New kind"}
         </span>
       </div>
