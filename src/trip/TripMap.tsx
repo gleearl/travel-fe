@@ -18,6 +18,7 @@ maplibregl.setWorkerUrl(workerUrl);
 import { WORLD_VIEW } from "../config";
 import { categoryOf } from "../lib/categories";
 import { useKinds } from "../lib/useKinds";
+import { useTheme, type Theme } from "../lib/theme";
 import type { Place, Trip } from "../lib/api/types";
 
 /* The map.
@@ -37,7 +38,12 @@ import type { Place, Trip } from "../lib/api/types";
    tile is ever fetched — no error, just a blank map. Unbundled, its own module
    interop fails outright. One library doing the whole job has neither problem.
 */
-const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const STYLES: Record<Theme, string> = {
+  light: "https://tiles.openfreemap.org/styles/liberty",
+  /* OpenFreeMap's own night style, from the same tiles: the pins, lifted for
+     the dark theme, stay the loudest thing on it. */
+  dark: "https://tiles.openfreemap.org/styles/dark",
+};
 
 /** How long a press has to be held on open map before it means "here". */
 const LONG_PRESS_MS = 550;
@@ -70,6 +76,8 @@ export function TripMap({
      viewport it does not have yet and lands somewhere near the pins rather
      than around them — which looks like the fit simply being wrong. */
   const [ready, setReady] = useState(false);
+  const { theme } = useTheme();
+  const styled = useRef(theme);
 
   /* Handlers reach the map through a ref rather than through the effect's
      dependencies: rebuilding the map because a callback changed identity would
@@ -88,7 +96,7 @@ export function TripMap({
 
     const created = new maplibregl.Map({
       container: container.current,
-      style: STYLE,
+      style: STYLES[theme],
       center: [centre.lng, centre.lat],
       zoom: centre.zoom,
       /* The sheet covers the bottom of the map, so what MapLibre puts in the
@@ -140,6 +148,16 @@ export function TripMap({
     // than rebuilding the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ── Light or dark ────────────────────────────────────────────────────────
+     A new style rather than a new map: the camera stays where it is, and the
+     pins are DOM markers rather than layers of the style, so they survive the
+     swap untouched. */
+  useEffect(() => {
+    if (!map.current || styled.current === theme) return;
+    styled.current = theme;
+    map.current.setStyle(STYLES[theme]);
+  }, [theme]);
 
   /* ── The pins ─────────────────────────────────────────────────────────── */
   const { kindOf } = useKinds();
@@ -284,7 +302,7 @@ function applyPinStyle(element: HTMLElement, place: Place, selected: boolean, co
 
   element.style.background = place.visited ? "var(--color-paper)" : colour;
   element.style.border = place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)";
-  element.style.boxShadow = "0 1px 3px rgb(28 26 23 / 0.3)";
+  element.style.boxShadow = "var(--shadow-pin)";
   element.style.zIndex = "";
 }
 

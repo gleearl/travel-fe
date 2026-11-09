@@ -82,3 +82,65 @@
      different app. Overshoots slightly, the way a sheet settles. */
   --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   After dark — the same field guide, read by lamplight.
+
+   Not an inversion. The paper goes to a warm near-black (a cool one would
+   read as a different app), the ink to the paper's own cream, and every
+   other token keeps its job: surface still sits above paper, sunk still
+   sits below it. Contrast is held to the same bar as the light theme, on
+   paper and on surface alike: ink 15.1:1, ink-2 8.0:1, ink-3 5.5:1.
+
+   The kind colours are lifted rather than kept, because a hue dark enough
+   to be text on cream is too dark to be text on night. Each is the same
+   hue, lighter, and still ≥ 7:1 — so a chip can carry paper-coloured text
+   on it, and a pin still reads against the dark map.
+
+   data-theme is set on <html> before first paint, by the script in
+   index.html, from the choice on the Account page or the device's own
+   setting. See src/lib/theme.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* How far a trip's own kind colours are lifted toward ink. A colour picked
+     in the light theme is dark; nothing to do there. */
+  --kind-lift: 0%;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-paper: #171512;
+  --color-surface: #201d19;
+  --color-sunk: #110f0d;
+  --color-rule: #35302a;
+  --color-rule-strong: #4d463d;
+
+  --color-ink: #f0e9df;
+  --color-ink-2: #b3aa9e;
+  --color-ink-3: #968d81;
+
+  --color-food: #ff7d70;
+  --color-cafe: #e3a14a;
+  --color-sight: #7aa7ff;
+  --color-shopping: #d98be6;
+  --color-club: #5cc683;
+  --color-other: #a5afba;
+
+  --color-active: #f0e9df;
+  --color-accent: #f0e9df;
+  --color-accent-soft: #2c2822;
+
+  --color-danger: #ff8a7c;
+  --color-focus: #5ec9ad;
+
+  /* Shadows on a dark ground have to be darker and wider to register at all. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.25);
+  --shadow-sheet: 0 -2px 24px rgb(0 0 0 / 0.5);
+  --shadow-pin: 0 2px 6px rgb(0 0 0 / 0.6);
+
+  /* Every swatch a kind can be given comes out ≥ 4.6:1 on paper at this. */
+  --kind-lift: 45%;
+}

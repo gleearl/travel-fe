@@ -9,9 +9,10 @@ import { AppHeader } from "../ui/AppHeader";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { PasskeyMark } from "../ui/PasskeyMark";
+import { AppearancePicker } from "./AppearancePicker";
 
-/* Who you are here, and the ways you can get back in. For now that is the
-   passkeys: the password is changed through the reset email, as before. */
+/* Who you are here, how the app looks for you, and the ways you can get back
+   in. The password is changed through the reset email, as before. */
 export function Account() {
   const { user } = useAuth();
   const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
@@ -32,6 +33,18 @@ export function Account() {
           <h1 className="font-display text-[1.75rem] leading-tight text-ink">{user?.name}</h1>
           <p className="mt-1 text-[0.9375rem] text-ink-2">{user?.email}</p>
         </div>
+
+        <section aria-labelledby="appearance-heading" className="flex flex-col gap-4">
+          <div>
+            <h2 id="appearance-heading" className="font-display text-xl text-ink">
+              Appearance
+            </h2>
+            <p className="mt-1.5 max-w-prose text-[0.9375rem] leading-relaxed text-ink-2">
+              Light or dark, on this device. Your other devices keep their own setting.
+            </p>
+          </div>
+          <AppearancePicker />
+        </section>
 
         <section aria-labelledby="passkeys-heading" className="flex flex-col gap-4">
           <div>

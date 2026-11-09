@@ -8,7 +8,11 @@
 export interface Kind {
   id: string;
   label: string;
+  /** A CSS colour to paint with — for a trip's own kind, its hex already
+   *  adjusted to the theme by paintKind. */
   color: string;
+  /** A trip's own kind: the hex it was saved with, which is what gets edited. */
+  hex?: string;
   /** Added by the trip, so it can be renamed, recoloured or removed. */
   custom?: boolean;
 }
@@ -30,7 +34,21 @@ const OTHER = BUILT_IN_KINDS[BUILT_IN_KINDS.length - 1];
 
 /** The built-in kinds with a trip's own slotted in before Other. */
 export function withTripKinds(own: readonly Kind[]): Kind[] {
-  return [...BUILT_IN_KINDS.slice(0, -1), ...own.map((kind) => ({ ...kind, custom: true })), OTHER];
+  return [
+    ...BUILT_IN_KINDS.slice(0, -1),
+    ...own.map((kind) => ({ ...kind, hex: kind.color, color: paintKind(kind.color), custom: true })),
+    OTHER,
+  ];
+}
+
+/* A trip's own kind is saved as one hex, picked to read on cream. In the dark
+   theme that hex is too dark to read on night, so it is lifted toward ink by
+   --kind-lift — 0% in the light theme, where it comes through untouched. In
+   oklab, so the hue holds as it lightens instead of going chalky. The built-in
+   kinds are custom properties with a dark value of their own, and pass. */
+export function paintKind(color: string): string {
+  if (!color.startsWith("#")) return color;
+  return `color-mix(in oklab, ${color}, var(--color-ink) var(--kind-lift))`;
 }
 
 /** An unknown kind — removed, or from another trip — reads as Other rather than a pin with no colour. */
