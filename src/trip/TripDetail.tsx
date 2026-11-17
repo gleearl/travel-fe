@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { deletePlace, updatePlace } from "../lib/api/places";
 import { applyChanges, type BulkChanges } from "../lib/bulk";
-import { withTripKinds, type Kind } from "../lib/categories";
+import { isBuiltIn, withTripKinds, type Kind } from "../lib/categories";
 import { KindsProvider } from "../lib/useKinds";
 import { fetchTrip } from "../lib/api/trips";
 import type { Place, Trip } from "../lib/api/types";
@@ -162,14 +162,17 @@ export function TripDetail() {
     );
   }, []);
 
-  /* And one removed: its places go back to Other, as they have on the server. */
+  /* And one removed: its places go back to Other, as they have on the server.
+     A built-in kind is only put back to how it looked; its places stay. */
   const removeKind = useCallback((id: string) => {
     setTrip((current) =>
       current
         ? {
             ...current,
             kinds: current.kinds.filter((k) => k.id !== id),
-            places: current.places.map((p) => (p.category === id ? { ...p, category: "other" } : p)),
+            places: isBuiltIn(id)
+              ? current.places
+              : current.places.map((p) => (p.category === id ? { ...p, category: "other" } : p)),
           }
         : current,
     );

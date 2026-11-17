@@ -156,11 +156,12 @@ vi.mock("../lib/api/places", () => ({
 
 const createKind = vi.fn();
 const deleteKind = vi.fn();
+const updateKind = vi.fn();
 
 vi.mock("../lib/api/kinds", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api/kinds")>()),
   createKind: (tripId: number, input: unknown) => createKind(tripId, input),
-  updateKind: vi.fn(),
+  updateKind: (tripId: number, id: string, input: unknown) => updateKind(tripId, id, input),
   deleteKind: (tripId: number, id: string) => deleteKind(tripId, id),
 }));
 
@@ -190,6 +191,11 @@ beforeEach(() => {
   });
   createKind.mockReset().mockImplementation((_tripId, input) => Promise.resolve({ id: "k-new", ...input }));
   deleteKind.mockReset().mockResolvedValue(undefined);
+  updateKind
+    .mockReset()
+    .mockImplementation((_tripId, id: string, input: { label: string; color: string | null; icon: string }) =>
+      Promise.resolve({ id, label: input.label, color: input.color ?? "", icon: input.icon }),
+    );
   live.current = { trips: { 7: 100 }, invitations: { count: 0, latest: null } };
 });
 
@@ -1046,7 +1052,7 @@ describe("a trip's own kinds", () => {
     await user.click(within(screen.getByRole("dialog", { name: "Big Echo" })).getByRole("button", { name: "Edit" }));
     const form = screen.getByRole("dialog", { name: "Edit place" });
 
-    await user.click(within(form).getByRole("button", { name: "Change the name or colour of Karaoke" }));
+    await user.click(within(form).getByRole("button", { name: "Change the name, icon or colour of Karaoke" }));
     await user.click(within(form).getByRole("button", { name: "Remove" }));
     await user.click(within(form).getByRole("button", { name: "Remove" }));
 
@@ -1055,3 +1061,46 @@ describe("a trip's own kinds", () => {
     expect(within(form).getByRole("button", { name: "Other" })).toHaveAttribute("aria-pressed", "true");
   });
 });
+
+describe("restyling a built-in kind on one trip", () => {
+  it("gives Food another icon and keeps its usual colour unless one is picked", async () => {
+    const user = userEvent.setup();
+    open();
+    await openSearch(user);
+    const form = screen.getByRole("dialog", { name: "Add a place" });
+
+    await user.click(within(form).getByRole("button", { name: "Food" }));
+    await user.click(within(form).getByRole("button", { name: "Change the icon or colour of Food" }));
+    const editor = within(form).getByRole("group", { name: "Edit Food" });
+
+    // Its name is everyone's: shown, not editable.
+    expect(within(editor).queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(within(editor).getByRole("radio", { name: "Usual colour" })).toHaveAttribute("aria-checked", "true");
+    // Nothing to reset until it has been changed.
+    expect(within(editor).queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+
+    await user.click(within(editor).getByRole("radio", { name: "Bowl" }));
+    await user.click(within(editor).getByRole("button", { name: "Save kind" }));
+
+    expect(updateKind).toHaveBeenCalledWith(7, "food", { label: "Food", color: null, icon: "bowl-food" });
+    expect(within(form).getByRole("button", { name: "Food" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("puts a restyled kind back, and its places stay where they are", async () => {
+    const user = userEvent.setup();
+    openAs("owner", { kinds: [{ id: "food", label: "Food", color: "#0e6e8c", icon: "bowl-food" }] });
+    await openSearch(user);
+    const form = screen.getByRole("dialog", { name: "Add a place" });
+
+    await user.click(within(form).getByRole("button", { name: "Food" }));
+    await user.click(within(form).getByRole("button", { name: "Change the icon or colour of Food" }));
+    await user.click(within(form).getByRole("button", { name: "Reset" }));
+    await user.click(within(form).getByRole("button", { name: "Reset" }));
+
+    expect(deleteKind).toHaveBeenCalledWith(7, "food");
+    expect(within(form).getByRole("button", { name: "Food" })).toHaveAttribute("aria-pressed", "true");
+    // Still on the trip's places: nothing went to Other.
+    expect(await screen.findByRole("heading", { name: "Ichiran" })).toBeInTheDocument();
+  });
+});
+

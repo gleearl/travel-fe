@@ -19,6 +19,8 @@ export interface Kind {
   hex?: string;
   /** Added by the trip, so it can be renamed, recoloured or removed. */
   custom?: boolean;
+  /** One of the built-in six, given an icon or colour of its own on this trip. */
+  restyled?: boolean;
 }
 
 /** In the order they appear as chips. Other is always last, whatever is added. */
@@ -36,10 +38,39 @@ export type Category = string;
 
 const OTHER = BUILT_IN_KINDS[BUILT_IN_KINDS.length - 1];
 
-/** The built-in kinds with a trip's own slotted in before Other. */
-export function withTripKinds(own: readonly Kind[]): Kind[] {
+/** The light-theme hex of each built-in colour in theme.css — what the colour
+ *  picker starts from when a built-in kind is first given a colour of its own. */
+export const BUILT_IN_HEX: Readonly<Record<string, string>> = {
+  food: "#c4231b",
+  cafe: "#975400",
+  sight: "#1a5fd0",
+  shopping: "#9b2fae",
+  club: "#147a3c",
+  other: "#4f5a66",
+};
+
+export function isBuiltIn(id: string): boolean {
+  return BUILT_IN_KINDS.some((kind) => kind.id === id);
+}
+
+/* A built-in kind as this trip has restyled it. Its name is everyone's and
+   stays; an empty colour keeps the built-in one, with its tuned dark value. */
+function restyle(builtIn: Kind, own: readonly Kind[]): Kind {
+  const style = own.find((kind) => kind.id === builtIn.id);
+  if (!style) return builtIn;
+  return {
+    ...builtIn,
+    ...(style.color ? { hex: style.color, color: paintKind(style.color) } : {}),
+    icon: iconOf(style.icon ?? builtIn.icon).id,
+    restyled: true,
+  };
+}
+
+/** The built-in kinds — as this trip has styled them — with its own slotted in before Other. */
+export function withTripKinds(all: readonly Kind[]): Kind[] {
+  const own = all.filter((kind) => !isBuiltIn(kind.id));
   return [
-    ...BUILT_IN_KINDS.slice(0, -1),
+    ...BUILT_IN_KINDS.slice(0, -1).map((kind) => restyle(kind, all)),
     ...own.map((kind) => ({
       ...kind,
       hex: kind.color,
@@ -48,7 +79,7 @@ export function withTripKinds(own: readonly Kind[]): Kind[] {
       icon: iconOf(kind.icon).id,
       custom: true,
     })),
-    OTHER,
+    restyle(OTHER, all),
   ];
 }
 
@@ -64,7 +95,7 @@ export function paintKind(color: string): string {
 
 /** An unknown kind — removed, or from another trip — reads as Other rather than a pin with no colour. */
 export function kindIn(kinds: readonly Kind[], id: string | null | undefined): Kind {
-  return kinds.find((kind) => kind.id === id) ?? OTHER;
+  return kinds.find((kind) => kind.id === id) ?? kinds.find((kind) => kind.id === OTHER.id) ?? OTHER;
 }
 
 /** For anything outside a trip, where only the built-in kinds exist. */

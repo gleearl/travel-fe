@@ -20,6 +20,19 @@ describe("kinds of place", () => {
     expect(kinds.find((k) => k.id === "k-2")?.icon).toBe(FALLBACK_ICON);
   });
 
+  it("restyles a built-in kind on a trip without adding a kind or renaming it", () => {
+    const kinds = withTripKinds([{ id: "food", label: "Noodles", color: "", icon: "bowl-food" }, karaoke]);
+    const food = kinds.find((k) => k.id === "food")!;
+
+    expect(kinds.filter((k) => k.id === "food")).toHaveLength(1);
+    expect(food).toMatchObject({ label: "Food", icon: "bowl-food", color: "var(--color-food)", restyled: true });
+    expect(food.custom).toBeUndefined();
+
+    const recoloured = withTripKinds([{ id: "food", label: "Food", color: "#0e6e8c", icon: "bowl-food" }]);
+    expect(recoloured[0].hex).toBe("#0e6e8c");
+    expect(recoloured[0].color).toContain("#0e6e8c");
+  });
+
   it("draws a kind it cannot find as Other rather than a pin with no colour", () => {
     expect(kindIn(withTripKinds([karaoke]), "nightclub").id).toBe("other");
     expect(kindIn(withTripKinds([]), karaoke.id).id).toBe("other");

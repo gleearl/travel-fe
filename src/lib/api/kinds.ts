@@ -10,7 +10,8 @@ export function toKind(raw: Record<string, unknown>): Kind {
   return {
     id: String(raw.id),
     label: String(raw.label ?? ""),
-    color: String(raw.color ?? ""),
+    // Null on a restyled built-in kind that keeps its own colour.
+    color: typeof raw.color === "string" ? raw.color : "",
     // Kinds saved before icons existed come back without one.
     icon: iconOf(typeof raw.icon === "string" ? raw.icon : null).id,
   };
@@ -22,8 +23,10 @@ export function toKinds(value: unknown): Kind[] {
 }
 
 export interface KindInput {
+  /** Ignored for a built-in kind, whose name stays. */
   label: string;
-  color: string;
+  /** Null keeps a built-in kind's own colour. */
+  color: string | null;
   icon: string;
 }
 
@@ -43,7 +46,8 @@ export async function updateKind(tripId: number, id: string, input: KindInput): 
   return toKind(unwrap(payload));
 }
 
-/** Its places go back to Other on the server; the caller does the same locally. */
+/** Its places go back to Other on the server; the caller does the same locally.
+ *  For a built-in kind this only takes its restyle away. */
 export async function deleteKind(tripId: number, id: string): Promise<void> {
   await request<void>(`/api/trips/${tripId}/kinds/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

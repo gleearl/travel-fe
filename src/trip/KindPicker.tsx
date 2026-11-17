@@ -1,5 +1,14 @@
 import { useId, useState } from "react";
-import { contrastOnPaper, KIND_SWATCHES, paintKind, type Category, type Kind } from "../lib/categories";
+import {
+  BUILT_IN_HEX,
+  BUILT_IN_KINDS,
+  contrastOnPaper,
+  isBuiltIn,
+  KIND_SWATCHES,
+  paintKind,
+  type Category,
+  type Kind,
+} from "../lib/categories";
 import { ApiError } from "../lib/api/http";
 import { createKind, deleteKind, updateKind } from "../lib/api/kinds";
 import { useKinds } from "../lib/useKinds";
@@ -56,13 +65,14 @@ export function KindPicker({
         ) : null}
       </div>
 
-      {editing === null && picked.custom ? (
+      {/* Any kind's look can change on this trip; only a trip's own can be renamed. */}
+      {editing === null ? (
         <button
           type="button"
           onClick={() => setEditing(picked)}
           className="mt-2 text-[0.8125rem] text-ink-2 underline decoration-rule-strong underline-offset-2 hover:text-ink"
         >
-          Change the name or colour of {picked.label}
+          {picked.custom ? `Change the name, icon or colour of ${picked.label}` : `Change the icon or colour of ${picked.label}`}
         </button>
       ) : null}
 
@@ -80,7 +90,8 @@ export function KindPicker({
           }}
           onDeleted={(id) => {
             onKindDeleted(id);
-            onChange("other");
+            // A built-in kind was only reset, and is still the one picked.
+            onChange(isBuiltIn(id) ? id : "other");
             setEditing(null);
           }}
         />
@@ -107,9 +118,14 @@ function KindEditor({
   onSaved: (kind: Kind) => void;
   onDeleted: (id: string) => void;
 }) {
+  /* A built-in kind keeps its name, and starts on its own colour — null, so
+     saving without touching the colour keeps the one tuned for both themes. */
+  const builtIn = kind && isBuiltIn(kind.id) ? BUILT_IN_KINDS.find((k) => k.id === kind.id)! : null;
   const [label, setLabel] = useState(kind?.label ?? "");
-  const [color, setColor] = useState(
-    kind?.hex ?? kind?.color ?? (KIND_SWATCHES.find((s) => !taken.includes(s.color)) ?? KIND_SWATCHES[0]).color,
+  const [color, setColor] = useState<string | null>(
+    builtIn
+      ? (kind?.hex ?? null)
+      : (kind?.hex ?? kind?.color ?? (KIND_SWATCHES.find((s) => !taken.includes(s.color)) ?? KIND_SWATCHES[0]).color),
   );
   const [icon, setIcon] = useState(kind?.icon ?? FALLBACK_ICON);
   /* Until someone picks an icon themselves, the name picks one: type
@@ -121,10 +137,11 @@ function KindEditor({
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const isSwatch = KIND_SWATCHES.some((s) => s.color === color);
+  const isSwatch = color === null || KIND_SWATCHES.some((s) => s.color === color);
   /* What it will actually be drawn in, in this theme. */
-  const painted = paintKind(color);
-  const contrast = contrastOnPaper(color);
+  const painted = color === null ? builtIn!.color : paintKind(color);
+  // The built-in colours are already tuned to read; only a picked one is checked.
+  const contrast = color === null ? Infinity : contrastOnPaper(color);
 
   async function save() {
     if (label.trim() === "") return;
@@ -173,30 +190,38 @@ function KindEditor({
           <KindIcon id={icon} size={26} />
         </span>
         <div className="min-w-0 flex-1">
-          <Field
-            label="Name"
-            placeholder="Karaoke, Onsen, Bakery"
-            maxLength={24}
-            autoFocus
-            value={label}
-            onChange={(e) => {
-              setLabel(e.target.value);
-              if (!iconChosen) setIcon(suggestIcon(e.target.value) ?? FALLBACK_ICON);
-            }}
-            /* This sits inside the place form, where Enter would save the place.
-               Here it means the kind. */
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                save();
-              }
-              if (e.key === "Escape") {
-                e.stopPropagation();
-                onCancel();
-              }
-            }}
-            error={error?.fieldError("label")}
-          />
+          {builtIn ? (
+            <div>
+              <span className="stamp mb-1.5 block text-ink-2">Name</span>
+              <p className="font-display text-[1.375rem] leading-tight text-ink">{builtIn.label}</p>
+              <p className="mt-0.5 text-[0.75rem] text-ink-3">Built-in kind · its look changes on this trip only</p>
+            </div>
+          ) : (
+            <Field
+              label="Name"
+              placeholder="Karaoke, Onsen, Bakery"
+              maxLength={24}
+              autoFocus
+              value={label}
+              onChange={(e) => {
+                setLabel(e.target.value);
+                if (!iconChosen) setIcon(suggestIcon(e.target.value) ?? FALLBACK_ICON);
+              }}
+              /* This sits inside the place form, where Enter would save the place.
+                 Here it means the kind. */
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  save();
+                }
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  onCancel();
+                }
+              }}
+              error={error?.fieldError("label")}
+            />
+          )}
         </div>
       </div>
 
@@ -204,7 +229,11 @@ function KindEditor({
         <span id={colourLabel} className="stamp mb-1.5 block text-ink-2">
           Colour
         </span>
-        <div role="radiogroup" aria-labelledby={colourLabel} className="flex flex-wrap gap-2">
+        {/* One row, spread edge to edge, whether there are nine swatches or ten. */}
+        <div role="radiogroup" aria-labelledby={colourLabel} className="flex items-center justify-between gap-1">
+          {builtIn ? (
+            <Swatch color={builtIn.color} name="Usual colour" on={color === null} onPick={() => setColor(null)} />
+          ) : null}
           {KIND_SWATCHES.map((swatch) => (
             <Swatch
               key={swatch.color}
@@ -231,7 +260,7 @@ function KindEditor({
           >
             <input
               type="color"
-              value={color}
+              value={color ?? BUILT_IN_HEX[builtIn!.id]}
               onChange={(e) => setColor(e.target.value)}
               aria-label="Your own colour"
               className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -316,22 +345,26 @@ function KindEditor({
       {confirmingRemove && kind ? (
         <div className="flex flex-col gap-2">
           <p className="text-[0.875rem] text-ink">
-            Remove {kind.label}? Places of this kind go back to Other.
+            {builtIn
+              ? `Put ${kind.label} back to its usual icon and colour on this trip?`
+              : `Remove ${kind.label}? Places of this kind go back to Other.`}
           </p>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => setConfirmingRemove(false)} disabled={busy} className="flex-1">
               Keep it
             </Button>
             <Button size="sm" variant="danger" onClick={remove} disabled={busy} className="flex-1">
-              {busy ? "Removing…" : "Remove"}
+              {busy ? (builtIn ? "Resetting…" : "Removing…") : builtIn ? "Reset" : "Remove"}
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex gap-2">
-          {kind ? (
+          {/* A trip's own kind can go; a built-in one can only be put back, and
+              only once it has been changed. */}
+          {kind && (!builtIn || kind.restyled) ? (
             <Button size="sm" variant="danger" onClick={() => setConfirmingRemove(true)} disabled={busy}>
-              Remove
+              {builtIn ? "Reset" : "Remove"}
             </Button>
           ) : null}
           <Button size="sm" onClick={onCancel} disabled={busy} className="flex-1">
