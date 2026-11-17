@@ -6,7 +6,7 @@ import { useKinds } from "../lib/useKinds";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { KindChip } from "./KindChip";
-import { FALLBACK_ICON, iconGroups, KindIcon } from "../lib/kindIcons";
+import { FALLBACK_ICON, iconGroups, KindIcon, suggestIcon } from "../lib/kindIcons";
 
 /* Choosing a place's kind — and, when none of them fits, making one.
 
@@ -112,6 +112,9 @@ function KindEditor({
     kind?.hex ?? kind?.color ?? (KIND_SWATCHES.find((s) => !taken.includes(s.color)) ?? KIND_SWATCHES[0]).color,
   );
   const [icon, setIcon] = useState(kind?.icon ?? FALLBACK_ICON);
+  /* Until someone picks an icon themselves, the name picks one: type
+     "Onsen" and the preview is already a drop. An existing kind keeps its own. */
+  const [iconChosen, setIconChosen] = useState(Boolean(kind));
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const colourLabel = useId();
   const iconLabel = useId();
@@ -154,27 +157,48 @@ function KindEditor({
       aria-label={kind ? `Edit ${kind.label}` : "New kind"}
       className="mt-3 flex flex-col gap-4 rounded-card border border-rule bg-sunk/60 p-3"
     >
-      <Field
-        label="Name"
-        placeholder="Karaoke, Onsen, Bakery"
-        maxLength={24}
-        autoFocus
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        /* This sits inside the place form, where Enter would save the place.
-           Here it means the kind. */
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            save();
-          }
-          if (e.key === "Escape") {
-            e.stopPropagation();
-            onCancel();
-          }
-        }}
-        error={error?.fieldError("label")}
-      />
+      {/* The kind as it will look, beside its name — live, so every choice
+          below shows up where the eye already is. */}
+      <div className="flex items-end gap-3">
+        <span
+          aria-hidden="true"
+          className="grid h-14 w-14 shrink-0 place-items-center rounded-pill transition-colors duration-200"
+          style={{
+            background: painted,
+            color: "var(--color-paper)",
+            border: "3px solid var(--color-paper)",
+            boxShadow: "0 6px 16px rgb(28 26 23 / 0.18), 0 1px 3px rgb(28 26 23 / 0.15)",
+          }}
+        >
+          <KindIcon id={icon} size={26} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <Field
+            label="Name"
+            placeholder="Karaoke, Onsen, Bakery"
+            maxLength={24}
+            autoFocus
+            value={label}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              if (!iconChosen) setIcon(suggestIcon(e.target.value) ?? FALLBACK_ICON);
+            }}
+            /* This sits inside the place form, where Enter would save the place.
+               Here it means the kind. */
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                save();
+              }
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                onCancel();
+              }
+            }}
+            error={error?.fieldError("label")}
+          />
+        </div>
+      </div>
 
       <div>
         <span id={colourLabel} className="stamp mb-1.5 block text-ink-2">
@@ -226,60 +250,52 @@ function KindEditor({
         ) : null}
       </div>
 
-      {/* The icon its pin, chip and card wear — grouped, so forty of them can
-          be scanned rather than read one by one. */}
+      {/* The icon its pin, chip and card wear: an even grid of round buttons,
+          grouped under small labels, in a well that scrolls — so forty icons
+          take the room of twelve. */}
       <div>
         <span id={iconLabel} className="stamp mb-1.5 block text-ink-2">
           Icon
         </span>
-        <div role="radiogroup" aria-labelledby={iconLabel} className="flex flex-col gap-2">
+        <div
+          role="radiogroup"
+          aria-labelledby={iconLabel}
+          className="max-h-[236px] overflow-y-auto overscroll-contain rounded-card border border-rule bg-paper px-2 pb-2"
+        >
           {iconGroups().map(({ group, icons }) => (
-            <div key={group} className="flex flex-wrap gap-1.5">
-              {icons.map((option) => {
-                const on = icon === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={on}
-                    aria-label={option.name}
-                    title={option.name}
-                    onClick={() => setIcon(option.id)}
-                    className={[
-                      "grid h-9 w-9 place-items-center rounded-pill transition-colors",
-                      on ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : "hover:bg-rule",
-                    ].join(" ")}
-                    style={on ? { background: painted, color: "var(--color-paper)" } : { color: "var(--color-ink-2)" }}
-                  >
-                    <KindIcon id={option.id} size={18} />
-                  </button>
-                );
-              })}
+            <div key={group}>
+              <p className="sticky top-0 z-10 bg-paper px-1 pt-2.5 pb-1.5 text-[0.6875rem] font-semibold tracking-wide text-ink-3">
+                {group}
+              </p>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(40px,1fr))] justify-items-center gap-y-1.5">
+                {icons.map((option) => {
+                  const on = icon === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      aria-label={option.name}
+                      title={option.name}
+                      onClick={() => {
+                        setIcon(option.id);
+                        setIconChosen(true);
+                      }}
+                      className={[
+                        "grid h-10 w-10 place-items-center rounded-pill transition-[background-color,color,transform] duration-150 active:scale-90",
+                        on ? "" : "bg-sunk text-ink-2 hover:text-ink",
+                      ].join(" ")}
+                      style={on ? { background: painted, color: "var(--color-paper)" } : undefined}
+                    >
+                      <KindIcon id={option.id} size={19} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* How it will look: the chip, the pin, and the name as a card writes it. */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-3">
-        <span className="stamp text-ink-3">Looks like</span>
-        <KindChip kind={{ label: label.trim(), color: painted, icon }} on />
-        <span
-          aria-hidden="true"
-          className="grid h-7 w-7 place-items-center rounded-pill"
-          style={{
-            background: painted,
-            color: "var(--color-paper)",
-            border: "1.5px solid var(--color-paper)",
-            boxShadow: "var(--shadow-pin)",
-          }}
-        >
-          <KindIcon id={icon} size={15} />
-        </span>
-        <span className="stamp" style={{ color: painted }}>
-          {label.trim() || "New kind"}
-        </span>
       </div>
 
       {/* A warning, not a refusal: it is your trip. But the name is written in

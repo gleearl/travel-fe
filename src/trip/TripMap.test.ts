@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import maplibregl from "maplibre-gl";
 import type { Place } from "../lib/api/types";
-import { pinElement, syncPin } from "./TripMap";
+import { pinElement, syncPin, zoomBand } from "./TripMap";
 import { categoryOf } from "../lib/categories";
 import { iconOf } from "../lib/kindIcons";
 
@@ -38,27 +38,27 @@ describe("keeping a pin where it belongs", () => {
     expect(marker.getElement().classList.contains("maplibregl-marker")).toBe(true);
   });
 
-  it("still shows the selected pin larger", () => {
+  it("marks the picked pin, and lets it go again", () => {
     const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
-    expect(marker.getElement().style.width).toBe("28px");
+    const element = marker.getElement();
+    expect(element.classList.contains("is-selected")).toBe(false);
 
     syncPin(marker, place(), true);
-    expect(marker.getElement().style.width).toBe("34px");
+    expect(element.classList.contains("is-selected")).toBe(true);
+    expect(element.getAttribute("aria-pressed")).toBe("true");
+    // MapLibre's own classes survive the restyle.
+    expect(element.classList.contains("maplibregl-marker")).toBe(true);
 
     syncPin(marker, place(), false);
-    expect(marker.getElement().style.width).toBe("28px");
+    expect(element.classList.contains("is-selected")).toBe(false);
   });
 
-  it("colours the selected pin apart from every category, and back again", () => {
+  it("paints the pin in its kind's colour, and follows the kind when it changes", () => {
     const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
-    expect(marker.getElement().style.background).toContain("--color-cafe");
+    expect(marker.getElement().style.getPropertyValue("--kind")).toContain("--color-cafe");
 
-    syncPin(marker, place({ visited: true }), true);
-    expect(marker.getElement().style.background).toContain("--color-active");
-    expect(marker.getElement().style.boxShadow).toContain("--color-cafe");
-
-    syncPin(marker, place(), false);
-    expect(marker.getElement().style.background).toContain("--color-cafe");
+    syncPin(marker, place({ category: "food" }), true, categoryOf("food"));
+    expect(marker.getElement().style.getPropertyValue("--kind")).toContain("--color-food");
   });
 
   it("moves the pin when the place does", () => {
@@ -73,21 +73,38 @@ describe("keeping a pin where it belongs", () => {
   it("wears its kind's icon, and changes it in place when the kind changes", () => {
     const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
     const element = marker.getElement();
-    expect(element.dataset.icon).toBe("coffee@15");
-    expect(element.querySelector("svg path")?.getAttribute("d")).toBe(iconOf("coffee").path);
+    expect(element.dataset.icon).toBe("coffee");
+    expect(element.querySelector(".pin-body path")?.getAttribute("d")).toBe(iconOf("coffee").path);
 
     syncPin(marker, place({ category: "food" }), false, categoryOf("food"));
 
     expect(marker.getElement()).toBe(element);
-    expect(element.querySelectorAll("svg")).toHaveLength(1);
-    expect(element.querySelector("svg path")?.getAttribute("d")).toBe(iconOf("fork-knife").path);
+    expect(element.querySelectorAll(".pin-body svg")).toHaveLength(1);
+    expect(element.querySelector(".pin-body path")?.getAttribute("d")).toBe(iconOf("fork-knife").path);
   });
 
-  it("hollows out a place once it has been seen", () => {
+  it("marks a place once it has been, and says so", () => {
     const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
 
     syncPin(marker, place({ visited: true }), false);
 
-    expect(marker.getElement().style.background).toContain("--color-paper");
+    expect(marker.getElement().classList.contains("is-visited")).toBe(true);
+    expect(marker.getElement().getAttribute("aria-label")).toBe("Fuglen Asakusa, been");
+  });
+
+  it("carries the place's name for when the map is close enough to show it", () => {
+    const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
+
+    syncPin(marker, place({ name: "Fuglen Tokyo" }), false);
+
+    expect(marker.getElement().querySelector(".pin-label")?.textContent).toBe("Fuglen Tokyo");
+  });
+});
+
+describe("how much a pin says at each distance", () => {
+  it("is a dot for a region, a glyph for a city, a name for a street", () => {
+    expect(zoomBand(8)).toBe("far");
+    expect(zoomBand(11)).toBe("mid");
+    expect(zoomBand(15)).toBe("near");
   });
 });

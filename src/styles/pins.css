@@ -1,0 +1,232 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Pins on the map — the way Apple Maps draws a place, in this app's colours.
+
+   At rest: a disc in the kind's colour with its glyph knocked out of it, on a
+   paper ring. Picked: it lifts into a balloon over a dot that marks the exact
+   spot, with the name underneath. Been there: a small ink check, the way
+   journal apps mark "been".
+
+   The map sets how much a pin says by how close you are:
+     .zoom-far   a region or wider — plain dots, so places across a country
+                 stay a pattern rather than a pile
+     (default)   a neighbourhood — the glyph
+     .zoom-near  a street — the glyph and the name
+
+   The pin's own element belongs to MapLibre, which positions it by writing a
+   transform to it. Nothing here touches that element's transform; everything
+   that moves is a child.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.pin {
+  /* The hit area — bigger than the disc, so a thumb finds it. */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pin:focus-visible {
+  outline: none;
+}
+
+.pin:focus-visible .pin-body {
+  box-shadow: 0 0 0 3px var(--color-focus), var(--shadow-pin);
+}
+
+.pin-body {
+  grid-area: 1 / 1;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid var(--color-paper);
+  background: var(--kind);
+  color: var(--color-paper);
+  box-shadow: var(--shadow-pin);
+  transition:
+    width 0.3s var(--ease-settle),
+    height 0.3s var(--ease-settle),
+    translate 0.35s var(--ease-settle),
+    scale 0.2s var(--ease-settle),
+    border-width 0.3s var(--ease-settle);
+}
+
+.pin-body svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .pin:hover .pin-body {
+    scale: 1.12;
+  }
+}
+
+.pin:active .pin-body {
+  scale: 0.92;
+}
+
+/* ── Been there ─────────────────────────────────────────────────────────── */
+
+.pin-check {
+  display: none;
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 13px;
+  height: 13px;
+  box-sizing: border-box;
+  place-items: center;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-paper);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  pointer-events: none;
+}
+
+.pin.is-visited .pin-check {
+  display: grid;
+}
+
+/* Quieter, not hollow: still the kind at a glance, but stepped back. */
+.pin.is-visited .pin-body {
+  background: color-mix(in oklab, var(--kind) 62%, var(--color-paper));
+}
+
+/* ── The name ──────────────────────────────────────────────────────────── */
+
+.pin-label {
+  display: none;
+  position: absolute;
+  top: calc(100% - 3px);
+  left: 50%;
+  translate: -50% 0;
+  max-width: 128px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11px/1.25 var(--font-body);
+  letter-spacing: 0.005em;
+  /* The kind's colour pulled toward ink so it reads on a busy street, and a
+     paper halo so it reads over roads and labels — how Apple sets theirs. */
+  color: color-mix(in oklab, var(--kind) 70%, var(--color-ink));
+  text-shadow:
+    0 0 2px var(--color-paper),
+    0 0 2px var(--color-paper),
+    0 0 3px var(--color-paper),
+    0 0 4px var(--color-paper);
+  pointer-events: none;
+}
+
+.zoom-near .pin-label {
+  display: block;
+}
+
+/* ── Far out: dots ─────────────────────────────────────────────────────── */
+
+.zoom-far .pin-body {
+  width: 13px;
+  height: 13px;
+  border-width: 1.5px;
+}
+
+.zoom-far .pin-body svg,
+.zoom-far .pin.is-visited .pin-check {
+  display: none;
+}
+
+/* ── Picked: the balloon ───────────────────────────────────────────────── */
+
+.pin.is-selected {
+  z-index: 3;
+}
+
+/* The exact spot, under the balloon. */
+.pin.is-selected::after {
+  content: "";
+  grid-area: 1 / 1;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid var(--color-paper);
+  background: var(--kind);
+  box-shadow: 0 1px 3px rgb(28 26 23 / 0.35);
+}
+
+.pin.is-selected .pin-body {
+  width: 46px;
+  height: 46px;
+  border-width: 3px;
+  translate: 0 -30px;
+  background: var(--kind);
+  box-shadow:
+    0 8px 18px rgb(28 26 23 / 0.28),
+    0 2px 4px rgb(28 26 23 / 0.2);
+  animation: pin-lift 0.5s var(--ease-settle);
+}
+
+.pin.is-selected .pin-body svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+/* The tail: a turned square, its two lower edges in paper to carry the ring
+   down to a point. */
+.pin.is-selected .pin-body::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 12px;
+  height: 12px;
+  background: var(--kind);
+  border-right: 3px solid var(--color-paper);
+  border-bottom: 3px solid var(--color-paper);
+  border-bottom-right-radius: 3px;
+  translate: -50% 0;
+  rotate: 45deg;
+  z-index: -1;
+}
+
+/* On the balloon's shoulder, where its lower right edge is. */
+.pin.is-selected .pin-check {
+  right: -8px;
+  bottom: 22px;
+  width: 16px;
+  height: 16px;
+}
+
+.pin.is-selected .pin-label {
+  display: block;
+  top: calc(100% - 6px);
+  max-width: 180px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+@keyframes pin-lift {
+  from {
+    scale: 0.55;
+    translate: 0 -6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-body {
+    transition: none;
+    animation: none !important;
+  }
+}

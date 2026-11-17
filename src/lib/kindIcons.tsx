@@ -92,7 +92,7 @@ export function iconGroups(): { group: string; icons: KindIconDef[] }[] {
 
 /** As markup, for the map pins — which are DOM nodes MapLibre owns, not React. */
 export function iconSvg(id: string | null | undefined, size: number): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" fill="currentColor" aria-hidden="true" style="display:block;pointer-events:none"><path d="${iconOf(id).path}"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" fill="currentColor" aria-hidden="true"><path d="${iconOf(id).path}"/></svg>`;
 }
 
 /** As a component, for everything React draws. Coloured by `currentColor`. */
@@ -110,4 +110,51 @@ export function KindIcon({ id, size = 16, className }: { id: string | null | und
       <path d={iconOf(id).path} />
     </svg>
   );
+}
+
+/* Words a kind's name might use, and the icon each one means. First match
+   wins, so the more specific words come first ("ice cream" before "cream",
+   "wine bar" before "bar"). */
+const HINTS: [RegExp, string][] = [
+  [/onsen|spa|bath|sauna|hot ?spring|pool/, "drop"],
+  [/karaoke|singing/, "microphone-stage"],
+  [/ice ?cream|gelato|soft ?serve/, "ice-cream"],
+  [/wine|vineyard|winery/, "wine"],
+  [/beer|pub|brew|izakaya/, "beer-stein"],
+  [/cocktail|speakeasy|\bbars?\b/, "martini"],
+  [/bak|cake|dessert|pastr|sweet|patisserie/, "cake"],
+  [/ramen|noodle|udon|soba|pho|bowl|curry/, "bowl-food"],
+  [/burger/, "hamburger"],
+  [/pizza/, "pizza"],
+  [/coffee|caf|tea|espresso|matcha/, "coffee"],
+  [/food|restaurant|dinner|lunch|brunch|breakfast|eat|sushi|bbq|grill|diner|bistro/, "fork-knife"],
+  [/museum|gallery|temple|shrine|church|palace|castle|monument|histor/, "bank"],
+  [/hike|trail|mountain|volcano/, "mountains"],
+  [/view|lookout|observ|tower|skyline/, "binoculars"],
+  [/garden|flower|bloom|botan/, "flower"],
+  [/park|forest|nature|tree/, "tree"],
+  [/beach|island|coast|surf/, "umbrella"],
+  [/photo|camera|instagram|sight/, "camera"],
+  [/hotel|hostel|stay|airbnb|ryokan|sleep|lodg/, "bed"],
+  [/home|apartment|friend/, "house"],
+  [/train|station|metro|subway|rail/, "train"],
+  [/airport|flight|plane/, "airplane"],
+  [/car|drive|parking|rental/, "car"],
+  [/boat|ferry|cruise|harbou?r|port/, "boat"],
+  [/bike|cycl/, "bicycle"],
+  [/market|shop|mall|store|boutique|vintage|thrift/, "shopping-bag"],
+  [/deal|sale|outlet/, "tag"],
+  [/music|concert|gig|jazz|live|record/, "music-notes"],
+  [/ticket|show|theat|cinema|movie|festival|event/, "ticket"],
+  [/game|arcade|anime|manga/, "game-controller"],
+  [/club|night|party|dance|disco/, "sparkle"],
+  [/gym|fitness|yoga|workout|climb/, "barbell"],
+  [/favou?rite|love|date|romantic/, "heart"],
+];
+
+/** The icon a kind's name suggests, or null when nothing in it rings a bell. */
+export function suggestIcon(name: string): string | null {
+  const text = name.toLowerCase().trim();
+  if (text === "") return null;
+  return HINTS.find(([pattern]) => pattern.test(text))?.[1] ?? null;
 }

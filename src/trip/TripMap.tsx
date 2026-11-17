@@ -134,6 +134,17 @@ export function TripMap({
       handlers.current.onDropPin({ lat: event.lngLat.lat, lng: event.lngLat.lng });
     });
 
+    /* How much each pin says depends on how close you are: dots for a region,
+       glyphs for a city, names for a street. Set on the container so
+       one class change restyles every pin at once. */
+    const band = () => {
+      const now = zoomBand(created.getZoom());
+      created.getContainer().classList.toggle("zoom-far", now === "far");
+      created.getContainer().classList.toggle("zoom-near", now === "near");
+    };
+    band();
+    created.on("zoom", band);
+
     created.on("load", () => setReady(true));
 
     map.current = created;
@@ -235,30 +246,24 @@ export function TripMap({
   return <div ref={container} className="h-full w-full" />;
 }
 
-/* A circle in the kind's colour with a paper ring and the kind's icon inside —
-   not a teardrop pin, which belongs to a different map. Visited places go
-   hollow: still there, no longer something to do. */
+/* A place on the map, drawn the way Apple Maps draws one — see pins.css for
+   the look, and how much a pin says at each distance. */
 export function pinElement(place: Place, selected: boolean, kind: Kind = categoryOf(place.category)): HTMLElement {
   const element = document.createElement("button");
   element.type = "button";
+  element.classList.add("pin");
+  element.innerHTML =
+    '<span class="pin-body"></span>' +
+    '<span class="pin-check" aria-hidden="true"><svg viewBox="0 0 12 12" width="8" height="8"><path d="M2.5 6.3l2.2 2.2 4.8-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+    '<span class="pin-label" aria-hidden="true"></span>';
 
-  /* The parts that never change. Set once, and never through cssText again —
-     see applyPinStyle. */
-  element.style.borderRadius = "999px";
-  element.style.padding = "0";
-  element.style.cursor = "pointer";
-  element.style.display = "grid";
-  element.style.placeItems = "center";
-  element.style.boxSizing = "border-box";
-  element.style.transition = "width .18s var(--ease-settle), height .18s var(--ease-settle)";
-
-  applyPinStyle(element, place, selected, kind);
+  applyPin(element, place, selected, kind);
 
   return element;
 }
 
 /**
- * Bring an existing pin up to date: its size, its colour, its icon, where it is.
+ * Bring an existing pin up to date: its kind, its state, its name, where it is.
  *
  * The marker keeps the element it was built with. MapLibre positions a pin by
  * writing a transform to that element on every move, and the element only sits
@@ -273,52 +278,36 @@ export function syncPin(
   selected: boolean,
   kind: Kind = categoryOf(place.category),
 ): void {
-  applyPinStyle(marker.getElement(), place, selected, kind);
+  applyPin(marker.getElement(), place, selected, kind);
   marker.setLngLat([place.lng, place.lat]);
 }
 
-/** Pin and icon sizes, at rest and picked. Big enough for the icon to read, small enough for a street of them. */
-const PIN = { rest: 28, picked: 34 } as const;
-const ICON = { rest: 15, picked: 18 } as const;
-
-/* Property by property rather than through cssText: MapLibre keeps the pin's
-   position in the transform on this same style object, and assigning cssText
-   would wipe it — dropping every pin onto the map's top left corner until the
-   next time the camera moved. The icon is the one child, and is only rewritten
-   when the kind or size it was drawn for changes. */
-function applyPinStyle(element: HTMLElement, place: Place, selected: boolean, kind: Kind): void {
-  const size = selected ? PIN.picked : PIN.rest;
-  const iconSize = selected ? ICON.picked : ICON.rest;
-  const colour = kind.color;
-
+/* Classes and one custom property, never className or cssText: MapLibre has
+   put classes of its own on this element and keeps the pin's position in its
+   transform, and replacing either drops the pin in the map's top left corner. */
+function applyPin(element: HTMLElement, place: Place, selected: boolean, kind: Kind): void {
   element.title = place.name;
-  element.setAttribute("aria-label", place.name);
-  element.style.width = `${size}px`;
-  element.style.height = `${size}px`;
+  element.setAttribute("aria-label", place.visited ? `${place.name}, been` : place.name);
+  element.setAttribute("aria-pressed", String(selected));
+  element.style.setProperty("--kind", kind.color);
+  element.classList.toggle("is-selected", selected);
+  element.classList.toggle("is-visited", place.visited);
 
-  const drawn = `${kind.icon}@${iconSize}`;
-  if (element.dataset.icon !== drawn) {
-    element.innerHTML = iconSvg(kind.icon, iconSize);
-    element.dataset.icon = drawn;
+  // The glyph is only redrawn when the kind's icon changes.
+  if (element.dataset.icon !== kind.icon) {
+    element.querySelector(".pin-body")!.innerHTML = iconSvg(kind.icon, 14);
+    element.dataset.icon = kind.icon;
   }
 
-  /* The picked pin goes ink, whatever its kind, with the kind kept as an outer
-     ring — so it stands apart from every other pin and still says what it is.
-     Raised too, so a neighbour can't sit on top of it. */
-  if (selected) {
-    element.style.background = "var(--color-active)";
-    element.style.color = "var(--color-paper)";
-    element.style.border = "2.5px solid var(--color-paper)";
-    element.style.boxShadow = `0 0 0 2.5px ${colour}, var(--shadow-pin)`;
-    element.style.zIndex = "2";
-    return;
-  }
+  const label = element.querySelector(".pin-label")!;
+  if (label.textContent !== place.name) label.textContent = place.name;
+}
 
-  element.style.background = place.visited ? "var(--color-paper)" : colour;
-  element.style.color = place.visited ? colour : "var(--color-paper)";
-  element.style.border = place.visited ? `2px solid ${colour}` : "1.5px solid var(--color-paper)";
-  element.style.boxShadow = "var(--shadow-pin)";
-  element.style.zIndex = "";
+/** How close the camera is, in the terms pins.css draws by. */
+export function zoomBand(zoom: number): "far" | "mid" | "near" {
+  if (zoom < 10) return "far";
+  if (zoom >= 14.5) return "near";
+  return "mid";
 }
 
 /** The centre a new pin should default to when there is nothing to fit. */
