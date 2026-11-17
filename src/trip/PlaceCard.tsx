@@ -5,6 +5,7 @@ import { Avatar } from "../ui/Avatar";
 import { InstagramMark } from "../ui/InstagramMark";
 import { Stamp } from "../ui/Stamp";
 import { TagList } from "../ui/TagChip";
+import { KindIcon } from "../lib/kindIcons";
 
 /* An entry in the guide. The name, where it is, the category written as well
    as coloured, and whatever you wrote down about it.
@@ -75,15 +76,19 @@ export function PlaceCard({
               ) : null}
             </span>
           ) : null}
+          {/* The pin as the map draws it, small: the kind's icon on its colour,
+              or hollow once you've been. */}
           <span
             aria-hidden="true"
-            className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-pill"
+            className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-pill"
             style={
               place.visited
-                ? { border: `2px solid ${category.color}` }
-                : { background: category.color }
+                ? { border: `2px solid ${category.color}`, color: category.color }
+                : { background: category.color, color: "var(--color-paper)" }
             }
-          />
+          >
+            <KindIcon id={category.icon} size={13} />
+          </span>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">

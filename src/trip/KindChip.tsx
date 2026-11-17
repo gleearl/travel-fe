@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { Kind } from "../lib/categories";
+import { KindIcon } from "../lib/kindIcons";
 
-/* One kind as a pressable chip: a dot of its colour while off, filled with it
+/* One kind as a pressable chip: its icon in its colour while off, filled with it
    while on. The filter, the place form and bulk edit all draw kinds this way,
    so a kind looks the same wherever it is picked. */
 export function KindChip({
@@ -10,7 +11,7 @@ export function KindChip({
   onClick,
   children,
 }: {
-  kind: Pick<Kind, "label" | "color">;
+  kind: Pick<Kind, "label" | "color"> & Partial<Pick<Kind, "icon">>;
   on: boolean;
   onClick?: () => void;
   /** After the name — a count, in the filter. */
@@ -28,11 +29,9 @@ export function KindChip({
           : { borderColor: "var(--color-rule)", color: "var(--color-ink-2)" }
       }
     >
-      <span
-        aria-hidden="true"
-        className="h-2 w-2 rounded-pill"
-        style={{ background: on ? "var(--color-paper)" : kind.color }}
-      />
+      <span style={{ color: on ? "var(--color-paper)" : kind.color }}>
+        <KindIcon id={kind.icon} size={13} />
+      </span>
       {kind.label || "New kind"}
       {children}
     </button>

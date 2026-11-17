@@ -16,7 +16,8 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
    supported way out, and it costs one request. */
 maplibregl.setWorkerUrl(workerUrl);
 import { WORLD_VIEW } from "../config";
-import { categoryOf } from "../lib/categories";
+import { categoryOf, type Kind } from "../lib/categories";
+import { iconSvg } from "../lib/kindIcons";
 import { useKinds } from "../lib/useKinds";
 import { useTheme, type Theme } from "../lib/theme";
 import type { Place, Trip } from "../lib/api/types";
@@ -183,11 +184,11 @@ export function TripMap({
         /* Restyled in place. The pin MapLibre was handed is the pin it keeps
            writing positions to, and swapping the node out from under it is how
            pins come loose from their coordinates. */
-        syncPin(existing, place, place.id === selectedId, kindOf(place.category).color);
+        syncPin(existing, place, place.id === selectedId, kindOf(place.category));
         continue;
       }
 
-      const element = pinElement(place, place.id === selectedId, kindOf(place.category).color);
+      const element = pinElement(place, place.id === selectedId, kindOf(place.category));
       element.addEventListener("click", (event) => {
         /* Otherwise the map takes this as a click on itself and the press
            begins a drag of the whole world. */
@@ -234,14 +235,10 @@ export function TripMap({
   return <div ref={container} className="h-full w-full" />;
 }
 
-/* A circle in the category's colour with a paper ring — not a teardrop pin,
-   which belongs to a different map. Visited places go hollow: still there, no
-   longer something to do. */
-export function pinElement(
-  place: Place,
-  selected: boolean,
-  colour = categoryOf(place.category).color,
-): HTMLElement {
+/* A circle in the kind's colour with a paper ring and the kind's icon inside —
+   not a teardrop pin, which belongs to a different map. Visited places go
+   hollow: still there, no longer something to do. */
+export function pinElement(place: Place, selected: boolean, kind: Kind = categoryOf(place.category)): HTMLElement {
   const element = document.createElement("button");
   element.type = "button";
 
@@ -250,15 +247,18 @@ export function pinElement(
   element.style.borderRadius = "999px";
   element.style.padding = "0";
   element.style.cursor = "pointer";
+  element.style.display = "grid";
+  element.style.placeItems = "center";
+  element.style.boxSizing = "border-box";
   element.style.transition = "width .18s var(--ease-settle), height .18s var(--ease-settle)";
 
-  applyPinStyle(element, place, selected, colour);
+  applyPinStyle(element, place, selected, kind);
 
   return element;
 }
 
 /**
- * Bring an existing pin up to date: its size, its colour, where it is.
+ * Bring an existing pin up to date: its size, its colour, its icon, where it is.
  *
  * The marker keeps the element it was built with. MapLibre positions a pin by
  * writing a transform to that element on every move, and the element only sits
@@ -271,29 +271,43 @@ export function syncPin(
   marker: MapLibreMarker,
   place: Place,
   selected: boolean,
-  colour = categoryOf(place.category).color,
+  kind: Kind = categoryOf(place.category),
 ): void {
-  applyPinStyle(marker.getElement(), place, selected, colour);
+  applyPinStyle(marker.getElement(), place, selected, kind);
   marker.setLngLat([place.lng, place.lat]);
 }
+
+/** Pin and icon sizes, at rest and picked. Big enough for the icon to read, small enough for a street of them. */
+const PIN = { rest: 28, picked: 34 } as const;
+const ICON = { rest: 15, picked: 18 } as const;
 
 /* Property by property rather than through cssText: MapLibre keeps the pin's
    position in the transform on this same style object, and assigning cssText
    would wipe it — dropping every pin onto the map's top left corner until the
-   next time the camera moved. */
-function applyPinStyle(element: HTMLElement, place: Place, selected: boolean, colour: string): void {
-  const size = selected ? 26 : 18;
+   next time the camera moved. The icon is the one child, and is only rewritten
+   when the kind or size it was drawn for changes. */
+function applyPinStyle(element: HTMLElement, place: Place, selected: boolean, kind: Kind): void {
+  const size = selected ? PIN.picked : PIN.rest;
+  const iconSize = selected ? ICON.picked : ICON.rest;
+  const colour = kind.color;
 
   element.title = place.name;
   element.setAttribute("aria-label", place.name);
   element.style.width = `${size}px`;
   element.style.height = `${size}px`;
 
-  /* The picked pin goes ink, whatever its kind, with the category kept as an
-     outer ring — so it stands apart from every other pin and still says what
-     it is. Raised too, so a neighbour can't sit on top of it. */
+  const drawn = `${kind.icon}@${iconSize}`;
+  if (element.dataset.icon !== drawn) {
+    element.innerHTML = iconSvg(kind.icon, iconSize);
+    element.dataset.icon = drawn;
+  }
+
+  /* The picked pin goes ink, whatever its kind, with the kind kept as an outer
+     ring — so it stands apart from every other pin and still says what it is.
+     Raised too, so a neighbour can't sit on top of it. */
   if (selected) {
     element.style.background = "var(--color-active)";
+    element.style.color = "var(--color-paper)";
     element.style.border = "2.5px solid var(--color-paper)";
     element.style.boxShadow = `0 0 0 2.5px ${colour}, var(--shadow-pin)`;
     element.style.zIndex = "2";
@@ -301,7 +315,8 @@ function applyPinStyle(element: HTMLElement, place: Place, selected: boolean, co
   }
 
   element.style.background = place.visited ? "var(--color-paper)" : colour;
-  element.style.border = place.visited ? `2.5px solid ${colour}` : "1.5px solid var(--color-paper)";
+  element.style.color = place.visited ? colour : "var(--color-paper)";
+  element.style.border = place.visited ? `2px solid ${colour}` : "1.5px solid var(--color-paper)";
   element.style.boxShadow = "var(--shadow-pin)";
   element.style.zIndex = "";
 }

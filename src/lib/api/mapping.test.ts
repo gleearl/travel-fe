@@ -112,7 +112,8 @@ describe("trips", () => {
 
     const trip = await fetchTrip(1);
 
-    expect(trip.kinds).toEqual([{ id: "k-karaoke1", label: "Karaoke", color: "#0f766e" }]);
+    // Saved before kinds had icons: it gets the plain pin.
+    expect(trip.kinds).toEqual([{ id: "k-karaoke1", label: "Karaoke", color: "#0f766e", icon: "map-pin" }]);
     expect(trip.places[0].category).toBe("k-karaoke1");
   });
 

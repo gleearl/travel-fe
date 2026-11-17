@@ -39,7 +39,7 @@ describe("light or dark", () => {
 
 describe("a trip's own kind colours", () => {
   it("are drawn through the theme's lift but edited as the hex they were saved with", () => {
-    const [karaoke] = withTripKinds([{ id: "k1", label: "Karaoke", color: "#0f766e" }]).filter((k) => k.custom);
+    const [karaoke] = withTripKinds([{ id: "k1", label: "Karaoke", color: "#0f766e", icon: "microphone-stage" }]).filter((k) => k.custom);
     expect(karaoke.hex).toBe("#0f766e");
     expect(karaoke.color).toBe(paintKind("#0f766e"));
     expect(karaoke.color).toContain("var(--kind-lift)");

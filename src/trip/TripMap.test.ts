@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import maplibregl from "maplibre-gl";
 import type { Place } from "../lib/api/types";
 import { pinElement, syncPin } from "./TripMap";
+import { categoryOf } from "../lib/categories";
+import { iconOf } from "../lib/kindIcons";
 
 const place = (over: Partial<Place> = {}): Place => ({
   id: 1,
@@ -38,13 +40,13 @@ describe("keeping a pin where it belongs", () => {
 
   it("still shows the selected pin larger", () => {
     const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
-    expect(marker.getElement().style.width).toBe("18px");
+    expect(marker.getElement().style.width).toBe("28px");
 
     syncPin(marker, place(), true);
-    expect(marker.getElement().style.width).toBe("26px");
+    expect(marker.getElement().style.width).toBe("34px");
 
     syncPin(marker, place(), false);
-    expect(marker.getElement().style.width).toBe("18px");
+    expect(marker.getElement().style.width).toBe("28px");
   });
 
   it("colours the selected pin apart from every category, and back again", () => {
@@ -66,6 +68,19 @@ describe("keeping a pin where it belongs", () => {
 
     expect(marker.getLngLat().lat).toBeCloseTo(35.66, 5);
     expect(marker.getLngLat().lng).toBeCloseTo(139.72, 5);
+  });
+
+  it("wears its kind's icon, and changes it in place when the kind changes", () => {
+    const marker = new maplibregl.Marker({ element: pinElement(place(), false), anchor: "center" });
+    const element = marker.getElement();
+    expect(element.dataset.icon).toBe("coffee@15");
+    expect(element.querySelector("svg path")?.getAttribute("d")).toBe(iconOf("coffee").path);
+
+    syncPin(marker, place({ category: "food" }), false, categoryOf("food"));
+
+    expect(marker.getElement()).toBe(element);
+    expect(element.querySelectorAll("svg")).toHaveLength(1);
+    expect(element.querySelector("svg path")?.getAttribute("d")).toBe(iconOf("fork-knife").path);
   });
 
   it("hollows out a place once it has been seen", () => {

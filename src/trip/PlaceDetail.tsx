@@ -7,6 +7,7 @@ import { InstagramMark } from "../ui/InstagramMark";
 import { Sheet } from "../ui/Sheet";
 import { Stamp } from "../ui/Stamp";
 import { TagList } from "../ui/TagChip";
+import { KindIcon } from "../lib/kindIcons";
 
 /* One place, all of it: what the card has to shorten — every tag, the whole
    note, who added it — and the way into editing it. Reading comes first and
@@ -50,7 +51,9 @@ export function PlaceDetail({
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-pill" style={{ background: category.color }} />
+            <span style={{ color: category.color }}>
+              <KindIcon id={category.icon} size={14} />
+            </span>
             <Stamp color={category.color}>{category.label}</Stamp>
           </span>
           {place.visited ? <Stamp>✓ Been</Stamp> : null}

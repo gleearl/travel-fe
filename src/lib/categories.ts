@@ -1,5 +1,7 @@
+import { iconOf } from "./kindIcons";
+
 /* Kinds of place. Every trip has the built-in six; a trip can add its own on
-   top — "Karaoke", "Onsen" — each with a name and a colour somebody chose.
+   top — "Karaoke", "Onsen" — each with a name, a colour and an icon somebody chose.
 
    A built-in kind's `color` is a CSS custom property rather than a hex value:
    that palette lives in theme.css, and a pin drawn from a literal here would
@@ -11,6 +13,8 @@ export interface Kind {
   /** A CSS colour to paint with — for a trip's own kind, its hex already
    *  adjusted to the theme by paintKind. */
   color: string;
+  /** Which of KIND_ICONS its pin, chip and card wear. */
+  icon: string;
   /** A trip's own kind: the hex it was saved with, which is what gets edited. */
   hex?: string;
   /** Added by the trip, so it can be renamed, recoloured or removed. */
@@ -19,12 +23,12 @@ export interface Kind {
 
 /** In the order they appear as chips. Other is always last, whatever is added. */
 export const BUILT_IN_KINDS: readonly Kind[] = [
-  { id: "food", label: "Food", color: "var(--color-food)" },
-  { id: "cafe", label: "Cafe", color: "var(--color-cafe)" },
-  { id: "sight", label: "Sight", color: "var(--color-sight)" },
-  { id: "shopping", label: "Shopping", color: "var(--color-shopping)" },
-  { id: "club", label: "Club", color: "var(--color-club)" },
-  { id: "other", label: "Other", color: "var(--color-other)" },
+  { id: "food", label: "Food", color: "var(--color-food)", icon: "fork-knife" },
+  { id: "cafe", label: "Cafe", color: "var(--color-cafe)", icon: "coffee" },
+  { id: "sight", label: "Sight", color: "var(--color-sight)", icon: "camera" },
+  { id: "shopping", label: "Shopping", color: "var(--color-shopping)", icon: "shopping-bag" },
+  { id: "club", label: "Club", color: "var(--color-club)", icon: "music-notes" },
+  { id: "other", label: "Other", color: "var(--color-other)", icon: "map-pin" },
 ];
 
 /** A place's kind: a built-in id, or one of its trip's own. */
@@ -36,7 +40,14 @@ const OTHER = BUILT_IN_KINDS[BUILT_IN_KINDS.length - 1];
 export function withTripKinds(own: readonly Kind[]): Kind[] {
   return [
     ...BUILT_IN_KINDS.slice(0, -1),
-    ...own.map((kind) => ({ ...kind, hex: kind.color, color: paintKind(kind.color), custom: true })),
+    ...own.map((kind) => ({
+      ...kind,
+      hex: kind.color,
+      color: paintKind(kind.color),
+      // Saved before kinds had icons, or with one this build doesn't know.
+      icon: iconOf(kind.icon).id,
+      custom: true,
+    })),
     OTHER,
   ];
 }

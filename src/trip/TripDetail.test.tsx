@@ -978,7 +978,7 @@ describe("acting on several places at once", () => {
 });
 
 describe("a trip's own kinds", () => {
-  const KARAOKE = { id: "k-karaoke1", label: "Karaoke", color: "#0f766e" };
+  const KARAOKE = { id: "k-karaoke1", label: "Karaoke", color: "#0f766e", icon: "microphone-stage" };
   const cardFor = async (name: string) => (await screen.findByRole("heading", { name })).closest("li")!;
 
   it("adds a kind from the place form, in the colour picked, and picks it", async () => {
@@ -990,9 +990,10 @@ describe("a trip's own kinds", () => {
     await user.click(within(form).getByRole("button", { name: "New kind" }));
     await user.type(within(form).getByLabelText("Name"), "Karaoke");
     await user.click(within(form).getByRole("radio", { name: "Rose" }));
+    await user.click(within(form).getByRole("radio", { name: "Karaoke" }));
     await user.click(within(form).getByRole("button", { name: "Add kind" }));
 
-    expect(createKind).toHaveBeenCalledWith(7, { label: "Karaoke", color: "#be185d" });
+    expect(createKind).toHaveBeenCalledWith(7, { label: "Karaoke", color: "#be185d", icon: "microphone-stage" });
     expect(await within(form).findByRole("button", { name: "Karaoke" })).toHaveAttribute("aria-pressed", "true");
   });
 

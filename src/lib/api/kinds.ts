@@ -1,4 +1,5 @@
 import type { Kind } from "../categories";
+import { iconOf } from "../kindIcons";
 import { request, unwrap } from "./http";
 
 /* A trip's own kinds of place. Each answer is the one kind it was about; the
@@ -6,7 +7,13 @@ import { request, unwrap } from "./http";
    trip hears about it through /api/updates. */
 
 export function toKind(raw: Record<string, unknown>): Kind {
-  return { id: String(raw.id), label: String(raw.label ?? ""), color: String(raw.color ?? "") };
+  return {
+    id: String(raw.id),
+    label: String(raw.label ?? ""),
+    color: String(raw.color ?? ""),
+    // Kinds saved before icons existed come back without one.
+    icon: iconOf(typeof raw.icon === "string" ? raw.icon : null).id,
+  };
 }
 
 /** Always a list, whatever an older API sends — or doesn't. */
@@ -17,6 +24,7 @@ export function toKinds(value: unknown): Kind[] {
 export interface KindInput {
   label: string;
   color: string;
+  icon: string;
 }
 
 export async function createKind(tripId: number, input: KindInput): Promise<Kind> {

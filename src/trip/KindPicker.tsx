@@ -6,6 +6,7 @@ import { useKinds } from "../lib/useKinds";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { KindChip } from "./KindChip";
+import { FALLBACK_ICON, iconGroups, KindIcon } from "../lib/kindIcons";
 
 /* Choosing a place's kind — and, when none of them fits, making one.
 
@@ -110,8 +111,10 @@ function KindEditor({
   const [color, setColor] = useState(
     kind?.hex ?? kind?.color ?? (KIND_SWATCHES.find((s) => !taken.includes(s.color)) ?? KIND_SWATCHES[0]).color,
   );
+  const [icon, setIcon] = useState(kind?.icon ?? FALLBACK_ICON);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const colourLabel = useId();
+  const iconLabel = useId();
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -125,7 +128,7 @@ function KindEditor({
     setBusy(true);
     setError(null);
     try {
-      const input = { label: label.trim(), color };
+      const input = { label: label.trim(), color, icon };
       onSaved(kind ? await updateKind(tripId, kind.id, input) : await createKind(tripId, input));
     } catch (caught) {
       setError(caught instanceof ApiError ? caught : new ApiError(0, "Couldn't reach the server."));
@@ -223,15 +226,57 @@ function KindEditor({
         ) : null}
       </div>
 
+      {/* The icon its pin, chip and card wear — grouped, so forty of them can
+          be scanned rather than read one by one. */}
+      <div>
+        <span id={iconLabel} className="stamp mb-1.5 block text-ink-2">
+          Icon
+        </span>
+        <div role="radiogroup" aria-labelledby={iconLabel} className="flex flex-col gap-2">
+          {iconGroups().map(({ group, icons }) => (
+            <div key={group} className="flex flex-wrap gap-1.5">
+              {icons.map((option) => {
+                const on = icon === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={option.name}
+                    title={option.name}
+                    onClick={() => setIcon(option.id)}
+                    className={[
+                      "grid h-9 w-9 place-items-center rounded-pill transition-colors",
+                      on ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : "hover:bg-rule",
+                    ].join(" ")}
+                    style={on ? { background: painted, color: "var(--color-paper)" } : { color: "var(--color-ink-2)" }}
+                  >
+                    <KindIcon id={option.id} size={18} />
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* How it will look: the chip, the pin, and the name as a card writes it. */}
       <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-3">
         <span className="stamp text-ink-3">Looks like</span>
-        <KindChip kind={{ label: label.trim(), color: painted }} on />
+        <KindChip kind={{ label: label.trim(), color: painted, icon }} on />
         <span
           aria-hidden="true"
-          className="h-[18px] w-[18px] rounded-pill"
-          style={{ background: painted, border: "1.5px solid var(--color-paper)", boxShadow: "var(--shadow-pin)" }}
-        />
+          className="grid h-7 w-7 place-items-center rounded-pill"
+          style={{
+            background: painted,
+            color: "var(--color-paper)",
+            border: "1.5px solid var(--color-paper)",
+            boxShadow: "var(--shadow-pin)",
+          }}
+        >
+          <KindIcon id={icon} size={15} />
+        </span>
         <span className="stamp" style={{ color: painted }}>
           {label.trim() || "New kind"}
         </span>
